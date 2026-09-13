@@ -115,7 +115,7 @@ async function toggleRadar() {
 }
 
 let slots = [], activeSlot = 0, cityData = [];
-let gridP = null, gridMeta = null; // 服务端降雨概率网格 flat 数组 rows*cols*4
+let gridP = null, gridMeta = null; // 服务端降雨概率网格 flat 数组 rows*cols*时段数
 function buildSlots() {
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = "";
@@ -140,6 +140,16 @@ async function loadData() {
     if (j.error || !j.cities || !j.cities.length) throw new Error(j.error || "no data");
     slots = j.slots;
     if (activeSlot >= slots.length) activeSlot = 0;
+    if (!cityData.length && slots.length) {
+      // 首次加载：默认选中最近一个还没过去的时段
+      try {
+        const parts = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Los_Angeles",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",hour12:false}).formatToParts(new Date());
+        const o = {}; parts.forEach(x => o[x.type] = x.value);
+        const nowH = `${o.year}-${o.month}-${o.day}T${o.hour}`;
+        const fi = slots.findIndex(s => s.time.slice(0,13) >= nowH);
+        if (fi >= 0) activeSlot = fi;
+      } catch(e) {}
+    }
     cityData = j.cities;
     gridMeta = j.grid.meta;
     gridP = j.grid.p;
@@ -199,7 +209,7 @@ function renderRain(slotIdx) {
   const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = gridMeta;
   let vals = new Float32Array(rows*cols);
   for (let k=0;k<rows*cols;k++) {
-    vals[k] = gridP[k*4+slotIdx] ?? 0;
+    vals[k] = gridP[k*slots.length+slotIdx] ?? 0;
   }
   // 平滑：3x3 均值滤波一遍，抹掉单点尖峰、雨带连成片，同时保留细粒度变化
   for (let pass=0; pass<1; pass++) {
