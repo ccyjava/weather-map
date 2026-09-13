@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bellevue 周边天气地图</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f5f9; color: #1e293b; }
+  header { background: #0f172a; color: #fff; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+  header .meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #cbd5e1; }
+  #refreshBtn { background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+  #refreshBtn:active { transform: scale(.97); }
+  #tabs { display: flex; gap: 8px; padding: 10px 12px; background: #fff; border-bottom: 1px solid #e2e8f0; overflow-x: auto; position: sticky; top: 0; z-index: 500; }
+  #tabs button { flex: 1 0 auto; border: 2px solid #e2e8f0; background: #f8fafc; border-radius: 10px; padding: 8px 14px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  #tabs button .d { display: block; font-size: 11px; color: #64748b; }
+  #tabs button.active { border-color: #2563eb; background: #eff6ff; font-weight: 700; }
+  #map { height: 62vh; min-height: 380px; }
+  #dry { background: #fff; padding: 10px 12px; border-top: 1px solid #e2e8f0; }
+  #dry .t { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #475569; }
+  #dryChips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .chip { flex: 0 0 auto; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 20px; padding: 6px 12px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .chip b { font-weight: 700; }
+  #legend { position: absolute; z-index: 600; left: 10px; bottom: 24px; background: rgba(255,255,255,.94); border-radius: 10px; padding: 8px 12px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+  #legend .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  #legend .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; }
+  #radarBtn.on { background: #dbeafe; border-color: #2563eb; font-weight: 700; }
+  footer { padding: 10px 16px 20px; font-size: 11px; color: #94a3b8; }
+  /* weather markers */
+  .wx { background: none; border: none; }
+  .wx .badge { display: flex; align-items: center; gap: 2px; background: rgba(255,255,255,.95); border: 3px solid var(--c); border-radius: 20px; padding: 2px 8px 2px 4px; box-shadow: 0 1px 5px rgba(0,0,0,.25); font-size: 15px; line-height: 1.2; }
+  .wx .badge .t { font-weight: 800; font-size: 14px; }
+  .wx .n { text-align: center; font-size: 11px; font-weight: 600; color: #0f172a; text-shadow: 0 0 3px #fff, 0 0 3px #fff; margin-top: 1px; white-space: nowrap; }
+  .wx.home .badge { background: #fef9c3; }
+  .wx.home .n { color: #b45309; }
+  #loading { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 1000; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; }
+  #errbar { display: none; background: #fef2f2; color: #b91c1c; padding: 10px 16px; font-size: 13px; }
+  #errbar button { margin-left: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗺️ Bellevue 周边天气地图</h1>
+  <div class="meta">
+    <span id="updated">数据加载中…</span>
+    <button id="refreshBtn">↻ 刷新数据</button>
+  </div>
+</header>
+<div id="errbar">⚠️ 天气数据加载失败，请检查网络后 <button id="retryBtn">重试</button></div>
+<div id="tabs"></div>
+<div style="position:relative">
+  <div id="map"></div>
+  <div id="legend">
+    <div class="row"><span class="dot" style="border-color:#22c55e"></span>降水概率 &lt;20%</div>
+    <div class="row"><span class="dot" style="border-color:#eab308"></span>20–40%</div>
+    <div class="row"><span class="dot" style="border-color:#f97316"></span>40–70%</div>
+    <div class="row"><span class="dot" style="border-color:#ef4444"></span>≥70%</div>
+    <div class="row" style="color:#64748b">圆圈颜色 = 降水概率</div>
+    <div class="row"><button id="radarBtn" style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">🛰 雷达回波（实况）</button></div>
+  </div>
+</div>
+<div id="dry">
+  <div class="t" id="dryTitle">这个时段最干燥的地方</div>
+  <div id="dryChips"></div>
+</div>
+<footer>数据：Open-Meteo 预报 · 雷达 RainViewer · 底图 © OpenStreetMap · 每 30 分钟自动刷新</footer>
+<div id="loading">⏳ 正在加载天气数据…</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const CITIES = [
+  ["Bellevue",47.6101,-122.2015,true],["Seattle",47.6062,-122.3321],["Redmond",47.6740,-122.1215],
+  ["Kirkland",47.6769,-122.2060],["Issaquah",47.5301,-122.0326],["Sammamish",47.6163,-122.0356],
+  ["Renton",47.4829,-122.2171],["Tacoma",47.2529,-122.4443],["Olympia",47.0379,-122.9007],
+  ["Everett",47.9790,-122.2021],["Lynnwood",47.8209,-122.3151],["Marysville",48.0518,-122.1771],
+  ["Bellingham",48.7519,-122.4787],["Snoqualmie",47.5287,-121.8254],["North Bend",47.4958,-121.7864],
+  ["Cle Elum",47.1954,-120.9373],["Ellensburg",46.9965,-120.5478],["Yakima",46.6021,-120.5059],
+  ["Wenatchee",47.4235,-120.3103],["Leavenworth",47.5962,-120.6615],["Chelan",47.8412,-120.0194],
+  ["Winthrop",48.4772,-120.1787],["Kennewick",46.2112,-119.1372],["Spokane",47.6588,-117.4260],
+  ["Moses Lake",47.1301,-119.2781],["Walla Walla",46.0650,-118.3301],["Sequim",48.0790,-123.1026],
+  ["Port Angeles",48.1181,-123.4307],["Forks",47.9506,-124.3856],["Ocean Shores",46.9736,-124.1549],
+  ["Shelton",47.2151,-123.1007],["Centralia",46.7162,-122.9543],["Vancouver WA",45.6387,-122.6615],
+  ["Portland",45.5152,-122.6784],["Hood River",45.7054,-121.5215],["Cannon Beach",45.8918,-123.9615],
+  ["Vancouver BC",49.2827,-123.1207],["Victoria",48.4284,-123.3656]
+];
+const WMO = {0:["☀️","晴"],1:["🌤️","大致晴"],2:["⛅","多云"],3:["☁️","阴"],45:["🌫️","雾"],48:["🌫️","雾凇"],
+  51:["🌦️","毛毛雨"],53:["🌦️","毛毛雨"],55:["🌧️","密毛毛雨"],56:["🌧️","冻毛毛雨"],57:["🌧️","冻毛毛雨"],
+  61:["🌧️","小雨"],63:["🌧️","中雨"],65:["🌧️","大雨"],66:["🌧️","冻雨"],67:["🌧️","冻雨"],
+  71:["❄️","小雪"],73:["❄️","中雪"],75:["❄️","大雪"],77:["❄️","雪粒"],
+  80:["🌧️","阵雨"],81:["🌧️","阵雨"],82:["⛈️","强阵雨"],95:["⛈️","雷阵雨"],96:["⛈️","雷暴冰雹"],99:["⛈️","雷暴冰雹"]};
+const probColor = p => p < 20 ? "#22c55e" : p < 40 ? "#eab308" : p < 70 ? "#f97316" : "#ef4444";
+
+const map = L.map("map").setView([47.35, -121.3], 7);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution:"© OpenStreetMap"}).addTo(map);
+const cityLayer = L.layerGroup().addTo(map);
+const cloudLayer = L.layerGroup().addTo(map);
+let radarLayer = null, radarOn = false;
+L.control.layers(null, {"城市天气": cityLayer, "云量覆盖（预报）": cloudLayer}, {collapsed: false}).addTo(map);
+async function toggleRadar() {
+  radarOn = !radarOn;
+  document.getElementById("radarBtn").classList.toggle("on", radarOn);
+  if (radarOn && !radarLayer) {
+    try {
+      const j = await (await fetch("https://api.rainviewer.com/public/weather-maps.json")).json();
+      const past = j.radar && j.radar.past;
+      if (past && past.length) {
+        const p = past[past.length-1].path;
+        radarLayer = L.tileLayer(`https://tilecache.rainviewer.com${p}/256/{z}/{x}/{y}/2/1_1.png`, {opacity:.65});
+      }
+    } catch(err) { console.warn("radar failed", err); }
+  }
+  if (radarLayer) { radarOn ? radarLayer.addTo(map) : map.removeLayer(radarLayer); }
+  else if (radarOn) { radarOn = false; document.getElementById("radarBtn").classList.remove("on"); }
+}
+
+function laDate(offsetDays) {
+  const now = new Date(new Date().toLocaleString("en-US",{timeZone:"America/Los_Angeles"}));
+  now.setDate(now.getDate() + offsetDays);
+  return now;
+}
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const wk = d => "周" + ["日","一","二","三","四","五","六"][d.getDay()];
+
+let slots = [], activeSlot = 0, cityData = [];
+function buildSlots() {
+  const t1 = laDate(1), t2 = laDate(2);
+  const f = d => `${d.getMonth()+1}/${d.getDate()}`;
+  slots = [
+    {label:"明天上午", sub:`${f(t1)} ${wk(t1)}`, time: ymd(t1)+"T09:00"},
+    {label:"明天下午", sub:`${f(t1)} ${wk(t1)}`, time: ymd(t1)+"T15:00"},
+    {label:"后天上午", sub:`${f(t2)} ${wk(t2)}`, time: ymd(t2)+"T09:00"},
+    {label:"后天下午", sub:`${f(t2)} ${wk(t2)}`, time: ymd(t2)+"T15:00"},
+  ];
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = "";
+  slots.forEach((s,i) => {
+    const b = document.createElement("button");
+    b.innerHTML = `${s.label}<span class="d">${s.sub}</span>`;
+    if (i === activeSlot) b.classList.add("active");
+    b.onclick = () => { activeSlot = i; buildSlots(); render(); };
+    tabs.appendChild(b);
+  });
+}
+function idxOf(times, t) {
+  let i = times.indexOf(t);
+  if (i >= 0) return i;
+  let best = 0, bd = 1e18;
+  times.forEach((x,k) => { const d = Math.abs(new Date(x) - new Date(t)); if (d < bd) { bd = d; best = k; } });
+  return best;
+}
+const chunk = (a,n) => { const r=[]; for(let i=0;i<a.length;i+=n) r.push(a.slice(i,i+n)); return r; };
+
+async function loadData() {
+  document.getElementById("loading").style.display = "flex";
+  document.getElementById("errbar").style.display = "none";
+  try {
+    // 1) cities
+    const cityChunks = chunk(CITIES, 20);
+    const cityRes = await Promise.all(cityChunks.map(c => {
+      const lat = c.map(x=>x[1]).join(","), lon = c.map(x=>x[2]).join(",");
+      return fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,weathercode,cloudcover&timezone=America%2FLos_Angeles&forecast_days=3&temperature_unit=celsius`).then(r=>r.json());
+    }));
+    cityData = [];
+    cityRes.forEach((arr, ci) => {
+      (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
+        const c = cityChunks[ci][k];
+        cityData.push({name:c[0], lat:c[1], lon:c[2], home:!!c[3], h: loc.hourly});
+      });
+    });
+    // 2) cloud grid
+    const pts = [];
+    for (let la=45.4; la<=49.5; la+=0.45) for (let lo=-124.6; lo<=-117.0; lo+=0.55) pts.push([+la.toFixed(2), +lo.toFixed(2)]);
+    const gridRes = await Promise.all(chunk(pts,40).map(g => {
+      const lat = g.map(x=>x[0]).join(","), lon = g.map(x=>x[1]).join(",");
+      return fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloudcover&timezone=America%2FLos_Angeles&forecast_days=3`).then(r=>r.json());
+    }));
+    const grid = [];
+    gridRes.forEach((arr, gi) => {
+      (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
+        const p = chunk(pts,40)[gi][k];
+        grid.push({lat:p[0], lon:p[1], h: loc.hourly});
+      });
+    });
+    cityData._grid = grid;
+    buildSlots();
+    render();
+    const t = new Date().toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
+    document.getElementById("updated").textContent = "数据更新于 " + t + "（洛杉矶时间）";
+  } catch(e) {
+    console.error(e);
+    document.getElementById("errbar").style.display = "block";
+  }
+  document.getElementById("loading").style.display = "none";
+}
+
+function render() {
+  const s = slots[activeSlot];
+  cityLayer.clearLayers();
+  cloudLayer.clearLayers();
+  const rows = cityData.map(c => {
+    const i = idxOf(c.h.time, s.time);
+    return {...c, i,
+      temp: c.h.temperature_2m[i], prob: c.h.precipitation_probability[i] ?? 0,
+      code: c.h.weathercode[i], cc: c.h.cloudcover ? c.h.cloudcover[i] : null};
+  });
+  rows.forEach(c => {
+    const [emoji, desc] = WMO[c.code] || ["❓","未知"];
+    const color = probColor(c.prob);
+    const icon = L.divIcon({className:"wx"+(c.home?" home":""),
+      html:`<div class="badge" style="--c:${color}"><span>${emoji}</span><span class="t">${Math.round(c.temp)}°</span></div><div class="n">${c.home?"★ ":""}${c.name}</div>`,
+      iconSize:[70,52], iconAnchor:[35,26]});
+    const f = Math.round(c.temp*9/5+32);
+    L.marker([c.lat,c.lon],{icon}).bindPopup(
+      `<b>${c.name}</b><br>${emoji} ${desc}<br>🌡 ${Math.round(c.temp)}°C (${f}°F)<br>☔ 降水概率 ${c.prob}%${c.cc!=null?`<br>☁️ 云量 ${c.cc}%`:""}<br><span style="color:#64748b;font-size:12px">${s.label} ${s.sub}</span>`
+    ).addTo(cityLayer);
+  });
+  // cloud cover grid
+  const grid = cityData._grid || [];
+  grid.forEach(g => {
+    const i = idxOf(g.h.time, s.time);
+    const cc = g.h.cloudcover[i] ?? 0;
+    if (cc < 12) return;
+    L.circle([g.lat,g.lon],{radius:26000, stroke:false, fillColor:"#475569", fillOpacity: cc/100*0.45}).addTo(cloudLayer);
+  });
+  // driest list
+  const dry = [...rows].sort((a,b)=>a.prob-b.prob).slice(0,10);
+  document.getElementById("dryTitle").textContent = `${s.label}（${s.sub}）最干燥的 10 个地方`;
+  const box = document.getElementById("dryChips");
+  box.innerHTML = "";
+  dry.forEach(c => {
+    const [emoji] = WMO[c.code] || ["❓"];
+    const el = document.createElement("div");
+    el.className = "chip";
+    el.innerHTML = `<b>${c.name}</b> ${emoji} ${Math.round(c.temp)}° · ${c.prob}%`;
+    el.style.borderColor = probColor(c.prob);
+    el.onclick = () => map.flyTo([c.lat,c.lon], 9, {duration:.8});
+    box.appendChild(el);
+  });
+}
+
+document.getElementById("refreshBtn").onclick = loadData;
+document.getElementById("retryBtn").onclick = loadData;
+document.getElementById("radarBtn").onclick = toggleRadar;
+setInterval(loadData, 30*60*1000);
+loadData();
+</script>
+</body>
+</html>
