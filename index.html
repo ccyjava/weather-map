@@ -308,7 +308,8 @@ async function loadData() {
     }
     cityData = j.cities;
     gridMeta = j.grid.meta;
-    if (j.grid.enc === "b64") {
+    if (typeof j.grid.p === "string") {
+      // base64 字节串（服务端 grid.meta.enc=b64）：解码为 Uint8Array
       const bin = atob(j.grid.p);
       gridP = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) gridP[i] = bin.charCodeAt(i);
