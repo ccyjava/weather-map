@@ -56,7 +56,10 @@
   <h1 id="mainTitle">🗺️ 周边天气地图</h1>
   <div class="meta">
     <span id="updated">数据加载中…</span>
-    <label style="font-size:13px;color:#475569">📍 我的位置 <select id="homeSelect" style="font-size:13px;padding:2px 4px;border-radius:6px;border:1px solid #cbd5e1"></select></label>
+    <label style="font-size:13px;color:#475569">📍 我的位置 <select id="homeSelect" style="font-size:13px;padding:2px 4px;border-radius:6px;border:1px solid #cbd5e1;max-width:130px"></select>
+      <button id="gpsBtn" title="使用当前位置" style="font-size:13px;padding:2px 8px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer">🎯</button>
+      <input id="locSearch" placeholder="搜索位置…" style="font-size:13px;padding:2px 6px;border-radius:6px;border:1px solid #cbd5e1;width:90px">
+    </label>
   </div>
 </header>
 <div id="errbar">⚠️ 天气数据加载失败，请检查网络后 <button id="retryBtn">重试</button></div>
@@ -182,13 +185,68 @@ async function loadData() {
         hsel.appendChild(o);
       });
       hsel.value = getHomeName();
-      const h0 = cityData.find(c => c.name === getHomeName());
-      if (h0 && h0.name !== "Bellevue") map.setView([h0.lat, h0.lon], 6);
+      const h0 = getHomeCoords();
+      if (h0.name !== "Bellevue") map.setView([h0.lat, h0.lon], 6);
       hsel.onchange = () => {
+        if (hsel.value === "__custom") return;
         setHomeName(hsel.value); render();
         const hc = cityData.find(c => c.name === hsel.value);
         if (hc) map.setView([hc.lat, hc.lon], 6);
       };
+    }
+    // 🎯 获取当前位置
+    const gpsBtn = document.getElementById("gpsBtn");
+    if (gpsBtn && !gpsBtn.dataset.bound) {
+      gpsBtn.dataset.bound = "1";
+      gpsBtn.onclick = () => {
+        if (!navigator.geolocation) { alert("当前浏览器不支持定位"); return; }
+        gpsBtn.textContent = "⏳"; gpsBtn.disabled = true;
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            gpsBtn.textContent = "🎯"; gpsBtn.disabled = false;
+            setHomeCustom("当前位置", pos.coords.latitude, pos.coords.longitude);
+            map.setView([pos.coords.latitude, pos.coords.longitude], 6);
+            render();
+          },
+          err => {
+            gpsBtn.textContent = "🎯"; gpsBtn.disabled = false;
+            alert("定位失败：" + (err.code === 1 ? "请允许浏览器获取位置权限" : err.message));
+          },
+          {enableHighAccuracy:true, timeout:15000}
+        );
+      };
+    }
+    // 🔍 搜索位置：先匹配190城，否则用 Nominatim 地理编码
+    const locSearch = document.getElementById("locSearch");
+    if (locSearch && !locSearch.dataset.bound) {
+      locSearch.dataset.bound = "1";
+      const doSearch = async () => {
+        const q = locSearch.value.trim();
+        if (!q) return;
+        const hit = cityData.find(c => c.name.toLowerCase() === q.toLowerCase());
+        if (hit) {
+          setHomeName(hit.name);
+          map.setView([hit.lat, hit.lon], 6);
+          render(); locSearch.value = "";
+          return;
+        }
+        locSearch.disabled = true;
+        try {
+          const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh&q=" + encodeURIComponent(q));
+          const arr = await r.json();
+          if (arr && arr.length) {
+            const nm = (arr[0].display_name || q).split(",")[0].trim();
+            const la = parseFloat(arr[0].lat), lo = parseFloat(arr[0].lon);
+            setHomeCustom(nm, la, lo);
+            map.setView([la, lo], 6);
+            render();
+          } else {
+            alert("没找到“" + q + "”，换个关键词试试");
+          }
+        } catch(e) { alert("搜索失败，请检查网络后重试"); }
+        locSearch.disabled = false; locSearch.value = "";
+      };
+      locSearch.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
     }
     buildSlots();
     render();
@@ -307,25 +365,54 @@ function renderRain(slotIdx) {
   L.imageOverlay(cv.toDataURL(), [[LAT_MIN,LON_MIN],[LAT_MAX,LON_MAX]], {interactive:false}).addTo(rainLayer);
 }
 
-// 我的位置：默认 Bellevue，可切换；存在 localStorage；只影响距离/★/排序，不重新抓数据
-function getHomeName() {
-  return localStorage.getItem("wx_home") || "Bellevue";
+// 我的位置：默认 Bellevue，可切换/GPS/搜索；存在 localStorage；只影响距离/★/排序，不重新抓数据
+// 存储格式：{type:"city",name} 或 {type:"custom",name,lat,lon}；兼容旧版纯字符串
+function getHome() {
+  const raw = localStorage.getItem("wx_home");
+  if (!raw) return {type:"city", name:"Bellevue"};
+  try { const o = JSON.parse(raw); if (o && o.type) return o; } catch(e) {}
+  return {type:"city", name:raw};
 }
-function setHomeName(n) {
-  localStorage.setItem("wx_home", n);
+function setHome(h) { localStorage.setItem("wx_home", JSON.stringify(h)); }
+function getHomeName() { return getHome().name; }
+function setHomeName(n) { setHome({type:"city", name:n}); }
+function setHomeCustom(name, lat, lon) { setHome({type:"custom", name, lat, lon}); }
+function getHomeCoords() {
+  const h = getHome();
+  if (h.type === "custom") return h;
+  const c = cityData.find(x => x.name === h.name);
+  return c ? {name:c.name, lat:c.lat, lon:c.lon} : {name:"Bellevue", lat:47.61, lon:-122.20};
+}
+function syncHomeSelect() {
+  const sel = document.getElementById("homeSelect");
+  if (!sel) return;
+  const h = getHome();
+  let opt = sel.querySelector('option[value="__custom"]');
+  if (h.type === "custom") {
+    if (!opt) { opt = document.createElement("option"); opt.value = "__custom"; sel.insertBefore(opt, sel.firstChild); }
+    opt.textContent = "📍 " + h.name;
+    sel.value = "__custom";
+  } else {
+    if (opt) opt.remove();
+    if (sel.value !== h.name) sel.value = h.name;
+  }
 }
 function refreshHomeUI() {
-  const hn = getHomeName();
   document.getElementById("mainTitle").textContent = `🗺️ 周边天气地图`;
   document.title = `周边天气地图`;
-  const sel = document.getElementById("homeSelect");
-  if (sel && sel.value !== hn) sel.value = hn;
+  syncHomeSelect();
 }
 function render() {
   const s = slots[activeSlot];
   refreshHomeUI();
   cityLayer.clearLayers();
   rainLayer.clearLayers();
+  const _home = getHomeCoords();
+  if (_home.type === "custom") {
+    L.marker([_home.lat, _home.lon], {
+      icon: L.divIcon({className:"", html:'<div style="font-size:22px;filter:drop-shadow(0 1px 2px #fff)">📍</div>', iconSize:[22,22], iconAnchor:[11,20]})
+    }).addTo(cityLayer).bindTooltip("📍 " + _home.name);
+  }
   const rows = cityData.map(c => {
     const v = c.slots[activeSlot] || {};
     return {...c,
@@ -333,8 +420,7 @@ function render() {
       code: v.code, cc: v.cc};
   });
   // 到家的距离（km）：列表按离家距离排序（家=用户选的位置）
-  const homeName = getHomeName();
-  const home = cityData.find(c => c.name === homeName) || cityData.find(c => c.home) || cityData[0];
+  const home = getHomeCoords();
   const R = 6371, rad = Math.PI/180;
   rows.forEach(c => {
     const dLa = (c.lat-home.lat)*rad, dLo = (c.lon-home.lon)*rad;
@@ -344,7 +430,7 @@ function render() {
   rows.forEach(c => {
     const [emoji, desc] = WMO[c.code] || ["❓","未知"];
     const color = probColor(c.prob);
-    const isHome = c.name === home.name;
+    const isHome = home.type !== "custom" && c.name === home.name;
     const icon = L.divIcon({className:"wx"+(isHome?" home":""),
       html:`<div class="badge" style="--c:${color}"><span>${emoji}</span><span class="t">${Math.round(c.temp)}°</span></div><div class="n">${isHome?"★ ":""}${c.name}</div>`,
       iconSize:[70,52], iconAnchor:[35,26]});
