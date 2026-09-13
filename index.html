@@ -127,7 +127,7 @@ function buildSlots() {
   });
 }
 async function loadData() {
-  lastLoad = Date.now(); nextRefresh = lastLoad + 30*60*1000;
+  lastLoad = Date.now();
   document.getElementById("loading").style.display = "flex";
   document.getElementById("errbar").style.display = "none";
   try {
@@ -146,6 +146,8 @@ async function loadData() {
     render();
     const t = new Date(j.updated_at*1000).toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
     document.getElementById("updated").textContent = "数据更新于 " + t + "（洛杉矶时间）";
+    // 下次真正抓取时间 = 服务端数据时间 + 30分钟；用户点刷新/进页面只读缓存，不触发抓取
+    nextRefresh = j.updated_at*1000 + 30*60*1000;
     document.getElementById("loading").style.display = "none";
   } catch(e) {
     console.error(e);
@@ -292,7 +294,7 @@ let lastLoad = 0, nextRefresh = Date.now() + 30*60*1000;
 setInterval(loadData, 30*60*1000);
 setInterval(() => {
   const el = document.getElementById("cd");
-  if (el) el.textContent = `⏱ ${Math.max(0, Math.ceil((nextRefresh - Date.now())/60000))} 分钟后自动刷新`;
+  if (el) el.textContent = `⏱ 数据 ${Math.max(0, Math.ceil((nextRefresh - Date.now())/60000))} 分钟后更新`;
 }, 5000);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && Date.now() - lastLoad > 10*60*1000) loadData();
