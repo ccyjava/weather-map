@@ -21,12 +21,14 @@
   #dry { background: #fff; padding: 10px 12px; border-top: 1px solid #e2e8f0; }
   #dry .t { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #475569; }
   #dryList { display: flex; flex-direction: column; }
-  .dryrow { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-top: 1px solid #f1f5f9; font-size: 13.5px; cursor: pointer; }
+  .dryrow { padding: 8px 4px; border-top: 1px solid #f1f5f9; cursor: pointer; }
   .dryrow:first-child { border-top: none; }
+  .dryrow .r1 { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
   .dryrow .n { font-weight: 700; min-width: 92px; }
   .dryrow .w { flex: 1; color: #475569; }
   .dryrow .t { font-weight: 700; }
-  .dryrow .p { color: #16a34a; font-weight: 700; min-width: 44px; text-align: right; }
+  .dryrow .p { font-weight: 700; min-width: 44px; text-align: right; }
+  .dryrow .tips { font-size: 12px; color: #64748b; margin-top: 5px; line-height: 1.7; }
   .dryempty { color: #64748b; font-size: 13px; padding: 8px 4px; }
   .drysec { font-size: 13px; font-weight: 700; color: #475569; margin: 10px 0 2px; }
   .drysec:first-child { margin-top: 2px; }
@@ -96,6 +98,61 @@ const CITIES = [
   ["Vancouver BC",49.2827,-123.1207],["Victoria",48.4284,-123.3656],
   ["Whistler",50.1163,-122.9574],["Salem OR",44.9429,-123.0351],["Eugene OR",44.0521,-123.0868],["Coeur d'Alene",47.6777,-116.7805]
 ];
+const TIPS = {
+"Bellevue":{hike:"Coal Creek Trail 林间溪流步道，轻松好走",spot:"Bellevue Downtown Park 瀑布喷泉大草坪",paddle:"Lake Washington 湖面开阔，桨板热门"},
+"Seattle":{hike:"Discovery Park Loop 环线看海观灯塔",spot:"Pike Place Market 派克市场必逛地标",paddle:"Lake Union 城市湖景桨板皮划艇"},
+"Redmond":{hike:"Sammamish River Trail 沿河绿道轻松",spot:"Marymoor Park 大草坪音乐会攀岩墙",paddle:"Lake Sammamish 湖面平静适合桨板"},
+"Kirkland":{hike:"Juanita Bay Park 湖畔木栈道观鸟",spot:"Kirkland Marina 湖畔码头商业街",paddle:"Lake Washington 桨板皮划艇热门下水点"},
+"Issaquah":{hike:"Poo Poo Point 看滑翔伞观湖，中等",spot:"Lake Sammamish State Park 湖滨沙滩野餐",climb:"Exit 32 / Deception Crags I-90旁运动攀岩",paddle:"Lake Sammamish 湖面平静适合桨板"},
+"Sammamish":{hike:"East Lake Sammamish Trail 湖东岸湖畔绿道",spot:"Pine Lake Park 湖滨沙滩游泳",paddle:"Lake Sammamish 桨板皮划艇热门湖"},
+"Renton":{hike:"Cedar River Trail 沿河17英里绿道",spot:"Gene Coulon Beach Park 湖滨公园看日落",paddle:"Lake Washington 南湾桨板皮划艇"},
+"Tacoma":{hike:"Point Defiance Park 环园步道看海",spot:"Museum of Glass 玻璃桥看吹玻璃",paddle:"Commencement Bay 湾内皮划艇看天际线"},
+"Olympia":{hike:"Mima Falls Loop 州立森林瀑布环线",spot:"Tumwater Falls Park 瀑布群三文鱼梯",paddle:"Budd Inlet 海湾皮划艇"},
+"Everett":{hike:"Spencer Island 湿地观鸟步道",spot:"Jetty Island 轮渡人工岛海滩",paddle:"Port Gardner Bay 海湾桨板"},
+"Lynnwood":{hike:"Scriber Lake Nature Trail 湖畔木栈道环线",spot:"Heritage Park 历史建筑怀旧园区"},
+"Marysville":{hike:"Ebey Waterfront Trail 河口湿地观鸟步道",spot:"Ebey Waterfront Park 滨水公园游船码头",paddle:"Ebey Slough 河口皮划艇观鸟"},
+"Bellingham":{hike:"Oyster Dome Trail 俯瞰海湾群岛，中等",spot:"Whatcom Falls Park 瀑布石桥公园",paddle:"Lake Whatcom 湖面桨板皮划艇"},
+"Snoqualmie":{hike:"Rattlesnake Ledge 俯瞰湖泊山谷，中等",spot:"Snoqualmie Falls 82米瀑布观景台",climb:"Little Si / Exit 32 运动攀岩岩场",paddle:"Rattlesnake Lake 湖面平静适合桨板"},
+"North Bend":{hike:"Rattlesnake Ledge 俯瞰湖泊的经典山脊线",spot:"Snoqualmie Falls 270 英尺高的著名瀑布",climb:"Exit 38 线路众多的运动攀岩区",paddle:"Rattlesnake Lake 平静无机动船的湖泊"},
+"Cle Elum":{hike:"Rachel Lake 高山湖群，略有挑战",spot:"Roslyn 《北国风云》取景小镇",paddle:"Lake Kachess 雪山环抱的划桨湖"},
+"Ellensburg":{hike:"Umtanum Creek 看大角羊的峡谷溪流步道",spot:"Wild Horse Wind Farm 可进风机内部参观",climb:"Frenchman Coulee 玄武岩柱的攀岩圣地",paddle:"Yakima River 漂流皮划艇的经典河段"},
+"Yakima":{hike:"Cowiche Canyon 旧铁路改建的峡谷步道",spot:"Yakima Valley 华州历史最久的葡萄酒乡",climb:"Royal Columns 玄武岩柱攀岩区",paddle:"Yakima River 水流平缓适合新手"},
+"Wenatchee":{hike:"Saddle Rock 俯瞰城市与哥伦比亚河",spot:"Ohme Gardens 山坡上的石砌花园",paddle:"Columbia River 宽阔平静的大河水面"},
+"Leavenworth":{hike:"Colchuck Lake 蓝绿色高山湖泊",spot:"Bavarian Village 德式风情的巴伐利亚小镇",climb:"Icicle Creek 花岗岩峡谷攀岩胜地",paddle:"Wenatchee River 可漂流的清澈河流"},
+"Chelan":{hike:"Echo Ridge 俯瞰湖泊的步道网络",spot:"Lake Chelan 全长 80 公里的冰川湖",paddle:"Lake Chelan 湖面开阔适合长划"},
+"Winthrop":{hike:"Blue Lake Trail 冰川湖与花岗岩峰",spot:"Washington Pass Overlook 北喀斯喀特观景点",paddle:"Pearrygin Lake 可租桨板的平静湖泊"},
+"Kennewick":{hike:"Badger Mountain 俯瞰三城的山脊步道",spot:"Sacajawea State Park 两河交汇的历史公园",paddle:"Columbia River 宽阔水面适合长距离"},
+"Spokane":{hike:"Bowl and Pitcher 吊桥与玄武岩的环线",spot:"Riverfront Park 市中心瀑布公园",climb:"Minnehaha 市区经典抱石攀岩区",paddle:"Long Lake 平静水库适合新手"},
+"Moses Lake":{hike:"Ancient Lakes 荒漠峡谷中的湖群步道",spot:"Potholes State Park 水鸟众多的水库公园",climb:"Frenchman Coulee 冰川洪水形成的攀岩区",paddle:"Moses Lake 湖面宽阔水上运动多"},
+"Walla Walla":{hike:"Bennington Lake 环湖平缓的观鸟步道",spot:"Whitman Mission 俄勒冈小径历史遗址",paddle:"Bennington Lake 只允许桨力船的湖"},
+"Sequim":{hike:"Dungeness Spit 全美最长的天然沙嘴",spot:"Lavender Farms 夏季盛开的薰衣草田",paddle:"Sequim Bay 风平浪静的海湾"},
+"Port Angeles":{hike:"Marymere Falls 老林中的 90 英尺瀑布",spot:"Hurricane Ridge 俯瞰奥林匹克群山",paddle:"Lake Crescent 清澈冰川湖划船"},
+"Forks":{hike:"Hall of Mosses Trail 雨林苔藓奇观",spot:"Rialto Beach 海蚀拱门潮池"},
+"Ocean Shores":{hike:"Perkins Pond Nature Trail 林间观鸟散步",spot:"Ocean City State Park 海滩湿地观野生动物"},
+"Shelton":{hike:"Kennedy Falls Trail 瀑布林间徒步",spot:"Harstine Island State Park 海岛公园观海",paddle:"Hammersley Inlet 潮流强劲需经验"},
+"Centralia":{hike:"Canyon Trail 市区自然保护区",spot:"Centralia Square Antiques 历史街区古董店淘宝"},
+"Vancouver WA":{hike:"Lacamas Heritage Trail 湖畔瀑布野花",spot:"Fort Vancouver National Historic Site 历史遗址探访",climb:"Beacon Rock 哥伦比亚河谷攀岩",paddle:"Vancouver Lake 平静湖面划船"},
+"Portland":{hike:"Wildwood Trail 城市森林步道",spot:"Pittock Mansion 俯瞰全城庄园",climb:"Broughton Bluff 玄武岩攀岩场",paddle:"Willamette River 穿城划桨观景"},
+"Hood River":{hike:"Tamanawas Falls Trail 穿林抵达百尺瀑布",spot:"Hood River Waterfront Park 滨水公园看风帆冲浪",paddle:"Columbia River 峡谷风浪划板"},
+"Cannon Beach":{hike:"Tillamook Head Trail 海岸林间步道",spot:"Haystack Rock 标志性海蚀柱潮池"},
+"Vancouver BC":{hike:"Grouse Grind 台阶爬升挑战",spot:"Stanley Park 海墙骑行漫步",climb:"Stawamus Chief 世界级花岗岩"},
+"Victoria":{hike:"Mount Douglas Park 登顶360度俯瞰全城",spot:"Butchart Gardens 世界级主题花园",paddle:"Oak Bay 海湾皮划艇观海"},
+"Whistler":{hike:"Panorama Ridge 俯瞰碧绿冰川湖",spot:"Peak 2 Peak Gondola 世界最长缆车",paddle:"Alta Lake 湖畔租板划船"},
+"Salem OR":{hike:"Trail of Ten Falls 十瀑布经典环线",spot:"Silver Falls State Park 俄州最大州立公园"},
+"Eugene OR":{hike:"Spencer Butte 登顶看三姐妹峰",spot:"Hayward Field 田径圣地巡礼",paddle:"Fern Ridge Reservoir 湖面划船观鸟"},
+"Coeur d'Alene":{hike:"Tubbs Hill 湖畔森林环线",spot:"Floating Boardwalk 世界最长浮桥",paddle:"Lake Coeur d'Alene 大湖划船桨板"},
+};
+
+function tipHtml(name) {
+  const t = TIPS[name]; if (!t) return "";
+  const parts = [];
+  if (t.hike) parts.push("🥾 " + t.hike);
+  if (t.spot) parts.push("📍 " + t.spot);
+  if (t.climb) parts.push("🧗 " + t.climb);
+  if (t.paddle) parts.push("🛶 " + t.paddle);
+  return parts.join("<br>");
+}
+
 const WMO = {0:["☀️","晴"],1:["🌤️","大致晴"],2:["⛅","多云"],3:["☁️","阴"],45:["🌫️","雾"],48:["🌫️","雾凇"],
   51:["🌦️","毛毛雨"],53:["🌦️","毛毛雨"],55:["🌧️","密毛毛雨"],56:["🌧️","冻毛毛雨"],57:["🌧️","冻毛毛雨"],
   61:["🌧️","小雨"],63:["🌧️","中雨"],65:["🌧️","大雨"],66:["🌧️","冻雨"],67:["🌧️","冻雨"],
@@ -307,8 +364,9 @@ function render() {
       html:`<div class="badge" style="--c:${color}"><span>${emoji}</span><span class="t">${Math.round(c.temp)}°</span></div><div class="n">${c.home?"★ ":""}${c.name}</div>`,
       iconSize:[70,52], iconAnchor:[35,26]});
     const f = Math.round(c.temp*9/5+32);
+    const tip = tipHtml(c.name);
     L.marker([c.lat,c.lon],{icon}).bindPopup(
-      `<b>${c.name}</b><br>${emoji} ${desc}<br>🌡 ${Math.round(c.temp)}°C (${f}°F)<br>☔ 降水概率 ${c.prob}%${c.cc!=null?`<br>☁️ 云量 ${c.cc}%`:""}<br><span style="color:#64748b;font-size:12px">${s.label} ${s.sub}</span>`
+      `<b>${c.name}</b><br>${emoji} ${desc}<br>🌡 ${Math.round(c.temp)}°C (${f}°F)<br>☔ 降水概率 ${c.prob}%${c.cc!=null?`<br>☁️ 云量 ${c.cc}%`:""}${tip?`<br><br>🎡 好玩推荐<br><span style="font-size:12.5px;line-height:1.7">${tip}</span>`:""}<br><span style="color:#64748b;font-size:12px">${s.label} ${s.sub}</span>`
     ).addTo(cityLayer);
   });
   // 连续云量阴影（云越多颜色越深，全晴则透明）
@@ -321,7 +379,8 @@ function render() {
     const [emoji, desc] = WMO[c.code] || ["❓","未知"];
     const el = document.createElement("div");
     el.className = "dryrow";
-    el.innerHTML = `<span class="n">${c.home?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p" style="color:${probColor(c.prob)}">${c.prob}%</span>`;
+    const tip = tipHtml(c.name);
+    el.innerHTML = `<div class="r1"><span class="n">${c.home?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p" style="color:${probColor(c.prob)}">${c.prob}%</span></div>${tip?`<div class="tips">${tip}</div>`:""}`;
     el.onclick = () => map.flyTo([c.lat,c.lon], 9, {duration:.8});
     return el;
   };
