@@ -17,8 +17,6 @@
   #tabs button.active { border-color: #2563eb; background: #eff6ff; font-weight: 700; }
   #map { height: 62vh; min-height: 380px; }
   #dry { background: #fff; padding: 10px 12px; border-top: 1px solid #e2e8f0; }
-  #hero { margin: 8px 10px 0; padding: 10px 14px; border-radius: 12px; background: linear-gradient(135deg,#ecfdf5,#f0fdfa); border: 1px solid #a7f3d0; font-size: 14px; color: #065f46; cursor: pointer; }
-  #hero b { font-size: 16px; }
   #dryFilter { display: flex; gap: 6px; margin: 0 0 8px; flex-wrap: wrap; }
   #dryFilter .pill { border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: #475569; }
   #dryFilter .pill.on { background: #2563eb; border-color: #2563eb; color: #fff; }
@@ -63,7 +61,6 @@
 </header>
 <div id="errbar">⚠️ 天气数据加载失败，请检查网络后 <button id="retryBtn">重试</button></div>
 <div id="tabs"></div>
-<div id="hero" style="display:none"></div>
 <div style="position:relative">
   <div id="map"></div>
   <div id="legend">
@@ -388,17 +385,6 @@ function render() {
       (b.textContent !== "全部" && parseInt(b.textContent) === dryMaxDist)));
   }
   const inDist = rows.filter(c => c.dist <= dryMaxDist);
-  // 🎯 最推荐：概率最低、距离最近（受距离筛选影响）
-  const hero = document.getElementById("hero");
-  if (inDist.length) {
-    const best = [...inDist].sort((a,b) => (a.prob-b.prob) || (a.dist-b.dist))[0];
-    const [be, bd] = WMO[best.code] || ["❓","未知"];
-    hero.style.display = "block";
-    hero.innerHTML = `🎯 最推荐：<b>${best.name}</b> ${be} ${bd} ${Math.round(best.temp)}°C · ☔ <b style="color:${probColor(best.prob)}">${best.prob}%</b> · 📍${Math.round(best.dist)}km <span style="color:#94a3b8;font-size:12px">（${s.label}${s.sub}，点我定位）</span>`;
-    hero.onclick = () => map.flyTo([best.lat, best.lon], 9, {duration: .8});
-  } else {
-    hero.style.display = "none";
-  }
   // 先按降水概率分档（5%一档），同档内按离家距离由近到远
   const byGradeDist = (a,b) => (Math.floor(a.prob/5)-Math.floor(b.prob/5)) || (a.dist-b.dist);
   sec("☀️ 基本不下雨（<5%）", inDist.filter(c => c.prob < 5).sort(byGradeDist));
