@@ -52,9 +52,10 @@
 </head>
 <body>
 <header>
-  <h1>🗺️ Bellevue 周边天气地图</h1>
+  <h1 id="mainTitle">🗺️ Bellevue 周边天气地图</h1>
   <div class="meta">
     <span id="updated">数据加载中…</span>
+    <label style="font-size:13px;color:#475569">📍 我的位置 <select id="homeSelect" style="font-size:13px;padding:2px 4px;border-radius:6px;border:1px solid #cbd5e1"></select></label>
     <button id="refreshBtn">↻ 刷新数据</button>
   </div>
 </header>
@@ -153,6 +154,16 @@ async function loadData() {
     cityData = j.cities;
     gridMeta = j.grid.meta;
     gridP = j.grid.p;
+    const hsel = document.getElementById("homeSelect");
+    if (hsel && !hsel.options.length) {
+      cityData.forEach(c => {
+        const o = document.createElement("option");
+        o.value = c.name; o.textContent = (c.home ? "★ " : "") + c.name;
+        hsel.appendChild(o);
+      });
+      hsel.value = getHomeName();
+      hsel.onchange = () => { setHomeName(hsel.value); render(); };
+    }
     buildSlots();
     render();
     const t = new Date(j.updated_at*1000).toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
@@ -257,8 +268,23 @@ function renderRain(slotIdx) {
   L.imageOverlay(cv.toDataURL(), [[LAT_MIN,LON_MIN],[LAT_MAX,LON_MAX]], {interactive:false}).addTo(rainLayer);
 }
 
+// 我的位置：默认 Bellevue，可切换；存在 localStorage；只影响距离/★/排序，不重新抓数据
+function getHomeName() {
+  return localStorage.getItem("wx_home") || "Bellevue";
+}
+function setHomeName(n) {
+  localStorage.setItem("wx_home", n);
+}
+function refreshHomeUI() {
+  const hn = getHomeName();
+  document.getElementById("mainTitle").textContent = `🗺️ ${hn} 周边天气地图`;
+  document.title = `${hn} 周边天气地图`;
+  const sel = document.getElementById("homeSelect");
+  if (sel && sel.value !== hn) sel.value = hn;
+}
 function render() {
   const s = slots[activeSlot];
+  refreshHomeUI();
   cityLayer.clearLayers();
   rainLayer.clearLayers();
   const rows = cityData.map(c => {
@@ -267,8 +293,9 @@ function render() {
       temp: v.t, prob: v.prob ?? 0,
       code: v.code, cc: v.cc};
   });
-  // 到家的距离（km）：列表按离家距离排序
-  const home = cityData.find(c => c.home) || cityData[0];
+  // 到家的距离（km）：列表按离家距离排序（家=用户选的位置）
+  const homeName = getHomeName();
+  const home = cityData.find(c => c.name === homeName) || cityData.find(c => c.home) || cityData[0];
   const R = 6371, rad = Math.PI/180;
   rows.forEach(c => {
     const dLa = (c.lat-home.lat)*rad, dLo = (c.lon-home.lon)*rad;
@@ -278,8 +305,9 @@ function render() {
   rows.forEach(c => {
     const [emoji, desc] = WMO[c.code] || ["❓","未知"];
     const color = probColor(c.prob);
-    const icon = L.divIcon({className:"wx"+(c.home?" home":""),
-      html:`<div class="badge" style="--c:${color}"><span>${emoji}</span><span class="t">${Math.round(c.temp)}°</span></div><div class="n">${c.home?"★ ":""}${c.name}</div>`,
+    const isHome = c.name === home.name;
+    const icon = L.divIcon({className:"wx"+(isHome?" home":""),
+      html:`<div class="badge" style="--c:${color}"><span>${emoji}</span><span class="t">${Math.round(c.temp)}°</span></div><div class="n">${isHome?"★ ":""}${c.name}</div>`,
       iconSize:[70,52], iconAnchor:[35,26]});
     const f = Math.round(c.temp*9/5+32);
     const tip = c.tip || "";
@@ -298,7 +326,7 @@ function render() {
     const el = document.createElement("div");
     el.className = "dryrow";
     const tip = c.tip || "";
-    el.innerHTML = `<div class="r1"><span class="n">${c.home?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p" style="color:${probColor(c.prob)}">${c.prob}%</span><span class="d">📍${Math.round(c.dist)}km</span></div>${tip?`<div class="tips">${tip}</div>`:""}`;
+    el.innerHTML = `<div class="r1"><span class="n">${c.name===home.name?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p" style="color:${probColor(c.prob)}">${c.prob}%</span><span class="d">📍${Math.round(c.dist)}km</span></div>${tip?`<div class="tips">${tip}</div>`:""}`;
     el.onclick = () => map.flyTo([c.lat,c.lon], 9, {duration:.8});
     return el;
   };
