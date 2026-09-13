@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bellevue 周边天气地图</title>
+<title>周边天气地图</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   * { box-sizing: border-box; }
@@ -57,7 +57,7 @@
 </head>
 <body>
 <header>
-  <h1 id="mainTitle">🗺️ Bellevue 周边天气地图</h1>
+  <h1 id="mainTitle">🗺️ 周边天气地图</h1>
   <div class="meta">
     <span id="updated">数据加载中…</span>
     <label style="font-size:13px;color:#475569">📍 我的位置 <select id="homeSelect" style="font-size:13px;padding:2px 4px;border-radius:6px;border:1px solid #cbd5e1"></select></label>
@@ -310,8 +310,8 @@ function setHomeName(n) {
 }
 function refreshHomeUI() {
   const hn = getHomeName();
-  document.getElementById("mainTitle").textContent = `🗺️ ${hn} 周边天气地图`;
-  document.title = `${hn} 周边天气地图`;
+  document.getElementById("mainTitle").textContent = `🗺️ 周边天气地图`;
+  document.title = `周边天气地图`;
   const sel = document.getElementById("homeSelect");
   if (sel && sel.value !== hn) sel.value = hn;
 }
