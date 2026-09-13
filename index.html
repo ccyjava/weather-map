@@ -68,8 +68,8 @@
     <div class="row"><span class="dot" style="border-color:#f97316"></span>40–70%</div>
     <div class="row"><span class="dot" style="border-color:#ef4444"></span>≥70%</div>
     <div class="row" style="color:#64748b">圆圈颜色 = 降水概率</div>
-    <div class="row" style="color:#64748b">灰色阴影 = 云量（越深云越多）</div>
-    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(205,210,220,.25), rgba(165,175,190,.4), rgba(125,135,150,.5), rgba(85,95,110,.6))"></span><span style="color:#64748b">少云 → 浓云</span></div>
+    <div class="row" style="color:#64748b">灰色阴影 = 降雨概率（越深越可能下雨）</div>
+    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(170,180,195,.3), rgba(140,150,168,.45), rgba(110,120,140,.55), rgba(80,92,112,.7))"></span><span style="color:#64748b">概率低 → 概率高</span></div>
     <div class="row"><button id="radarBtn" style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">🛰 雷达回波（实况）</button></div>
   </div>
 </div>
@@ -163,9 +163,9 @@ const probColor = p => p < 5 ? "#16a34a" : p < 20 ? "#a3e635" : p < 40 ? "#eab30
 const map = L.map("map").setView([47.0, -120.6], 6);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution:"© OpenStreetMap"}).addTo(map);
 const cityLayer = L.layerGroup().addTo(map);
-const cloudLayer = L.layerGroup().addTo(map);
+const rainLayer = L.layerGroup().addTo(map);
 let radarLayer = null, radarOn = false;
-L.control.layers(null, {"城市天气": cityLayer, "云量阴影（预报）": cloudLayer}, {collapsed: false}).addTo(map);
+L.control.layers(null, {"城市天气": cityLayer, "降雨阴影（预报）": rainLayer}, {collapsed: false}).addTo(map);
 async function toggleRadar() {
   radarOn = !radarOn;
   document.getElementById("radarBtn").classList.toggle("on", radarOn);
@@ -274,7 +274,7 @@ async function loadData() {
     const t = new Date().toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
     document.getElementById("updated").textContent = "数据更新于 " + t + "（洛杉矶时间）";
     document.getElementById("loading").style.display = "none";
-    // 2) 云量网格：限流并发、容忍部分失败，不阻塞城市显示
+    // 2) 降雨概率网格：限流并发、容忍部分失败，不阻塞城市显示
     const LAT_MIN=43.8, LAT_MAX=50.3, LON_MIN=-124.8, LON_MAX=-116.0, DLAT=0.2, DLON=0.25;
     const grows = Math.floor((LAT_MAX-LAT_MIN)/DLAT)+1, gcols = Math.floor((LON_MAX-LON_MIN)/DLON)+1;
     const pts = [];
@@ -283,7 +283,7 @@ async function loadData() {
     const gchunks = chunk(pts, 80);
     const gurls = gchunks.map(g => {
       const lat = g.map(x=>x[0]).join(","), lon = g.map(x=>x[1]).join(",");
-      return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloudcover&timezone=America%2FLos_Angeles&forecast_days=3`;
+      return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation_probability&timezone=America%2FLos_Angeles&forecast_days=3`;
     });
     const gridRes = await fetchLimited(gurls.map(u => () => fetchJsonRetry(u)), 4);
     // 用经纬度 key 组装网格；缺失点用最近可用点回填，避免整体错位
@@ -322,13 +322,13 @@ async function loadData() {
   }
 }
 
-// 云量 → 颜色/透明度：云越多越深，但最高只到深灰（地图始终可见，不糊成黑团）
-function cloudStyle(v) {
-  if (v < 8) return null;                                     // <8% 近乎晴：透明
-  if (v < 25) return [205,210,220, Math.round(30+(v-8)/17*30)];   // 淡云：很浅
-  if (v < 50) return [165,175,190, Math.round(60+(v-25)/25*35)];   // 少云：浅灰
-  if (v < 75) return [125,135,150, Math.round(95+(v-50)/25*30)];   // 多云：中灰
-  return [85,95,110, Math.round(125+(v-75)/25*25)];             // 浓云：深灰（不发黑）
+// 降雨概率 → 颜色/透明度：分档与城市圆圈一致，概率越高越深
+function rainStyle(v) {
+  if (v < 5) return null;                                       // 基本不下雨：透明
+  if (v < 20) return [170,180,195, Math.round(40+(v-5)/15*40)];     // 概率低：很浅
+  if (v < 40) return [140,150,168, Math.round(80+(v-20)/20*40)];    // 20-40%：浅灰
+  if (v < 70) return [110,120,140, Math.round(120+(v-40)/30*35)];   // 40-70%：中灰
+  return [80,92,112, Math.round(155+(v-70)/30*25)];             // ≥70%：深灰
 }
 // 有机云纹理：多 octave value noise，让云呈现真实轮廓而非直线/团块
 function hash2(x, y) { const h = Math.sin(x*127.1+y*311.7)*43758.5453; return h-Math.floor(h); }
@@ -349,16 +349,16 @@ function noiseField(W, H) {
   _nz = {w:W, h:H, f};
   return f;
 }
-// 连续云量阴影：细网格双线性插值 + 分形噪声云纹 + canvas 渲染为半透明图层
-function renderCloud(slotTime) {
-  cloudLayer.clearLayers();
+// 连续降雨概率阴影：细网格双线性插值 + 分形噪声雨带纹理 + canvas 半透明图层
+function renderRain(slotTime) {
+  rainLayer.clearLayers();
   const gridH = cityData._gridH, m = cityData._gridMeta;
   if (!gridH || !gridH.length || !m) return;
   const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = m;
   const vals = new Float32Array(rows*cols);
   for (let k=0;k<gridH.length;k++) {
     const h = gridH[k];
-    vals[k] = h ? (h.cloudcover[idxOf(h.time, slotTime)] ?? 0) : 0;
+    vals[k] = h ? (h.precipitation_probability[idxOf(h.time, slotTime)] ?? 0) : 0;
   }
   const W = 800, H = 590;
   const nz = noiseField(W, H);
@@ -375,10 +375,10 @@ function renderCloud(slotTime) {
       const c0 = Math.floor(c), fc = c-c0, c1 = Math.min(c0+1, cols-1);
       const v = vals[r0*cols+c0]*(1-fr)*(1-fc) + vals[r0*cols+c1]*(1-fr)*fc
               + vals[r1*cols+c0]*fr*(1-fc)     + vals[r1*cols+c1]*fr*fc;
-      // 云纹扰动：幅度与云量成正比，晴空保持干净，云区呈现有机轮廓
+      // 雨带纹理扰动：幅度与概率成正比，无雨区保持干净，雨区呈现有机轮廓
       let ve = v + (nz[py*W+qx]-0.5)*44*(v/100);
       ve = ve<0?0:(ve>100?100:ve);
-      const st = cloudStyle(ve);
+      const st = rainStyle(ve);
       if (st) {
         const o = (py*W+qx)*4;
         px[o]=st[0]; px[o+1]=st[1]; px[o+2]=st[2]; px[o+3]=st[3];
@@ -386,13 +386,13 @@ function renderCloud(slotTime) {
     }
   }
   ctx.putImageData(img, 0, 0);
-  L.imageOverlay(cv.toDataURL(), [[LAT_MIN,LON_MIN],[LAT_MAX,LON_MAX]], {interactive:false}).addTo(cloudLayer);
+  L.imageOverlay(cv.toDataURL(), [[LAT_MIN,LON_MIN],[LAT_MAX,LON_MAX]], {interactive:false}).addTo(rainLayer);
 }
 
 function render() {
   const s = slots[activeSlot];
   cityLayer.clearLayers();
-  cloudLayer.clearLayers();
+  rainLayer.clearLayers();
   const rows = cityData.map(c => {
     const i = idxOf(c.h.time, s.time);
     return {...c, i,
@@ -411,8 +411,8 @@ function render() {
       `<b>${c.name}</b><br>${emoji} ${desc}<br>🌡 ${Math.round(c.temp)}°C (${f}°F)<br>☔ 降水概率 ${c.prob}%${c.cc!=null?`<br>☁️ 云量 ${c.cc}%`:""}${tip?`<br><br>🎡 好玩推荐<br><span style="font-size:12.5px;line-height:1.7">${tip}</span>`:""}<br><span style="color:#64748b;font-size:12px">${s.label} ${s.sub}</span>`
     ).addTo(cityLayer);
   });
-  // 连续云量阴影（云越多颜色越深，全晴则透明）
-  renderCloud(s.time);
+  // 连续降雨概率阴影
+  renderRain(s.time);
   // 哪里不下雨：基本不下雨（<5%）和概率低（5–20%）分成两组
   document.getElementById("dryTitle").textContent = `哪里不下雨？（${s.label} ${s.sub}）`;
   const box = document.getElementById("dryList");
