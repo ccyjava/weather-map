@@ -286,16 +286,34 @@ async function loadData() {
       return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloudcover&timezone=America%2FLos_Angeles&forecast_days=3`;
     });
     const gridRes = await fetchLimited(gurls.map(u => () => fetchJsonRetry(u)), 4);
-    const grid = [];
+    // 用经纬度 key 组装网格；缺失点用最近可用点回填，避免整体错位
+    const gridMap = new Map();
     gridRes.forEach((arr, gi) => {
       if (!arr) return;
       (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
         if (!loc || !loc.hourly) return;
         const p = gchunks[gi][k];
-        grid.push({lat:p[0], lon:p[1], h: loc.hourly});
+        gridMap.set(p[0].toFixed(2)+","+p[1].toFixed(2), loc.hourly);
       });
     });
-    cityData._grid = grid;
+    const gm = cityData._gridMeta, grows2 = gm.rows, gcols2 = gm.cols;
+    const avail = [];
+    gridMap.forEach((h, key) => { const s = key.split(","); avail.push({la:+s[0], lo:+s[1], h}); });
+    const gridH = new Array(grows2*gcols2);
+    for (let r=0;r<grows2;r++) for (let c=0;c<gcols2;c++) {
+      const key = (gm.LAT_MIN+r*gm.DLAT).toFixed(2)+","+(gm.LON_MIN+c*gm.DLON).toFixed(2);
+      const h = gridMap.get(key);
+      if (h) { gridH[r*gcols2+c] = h; continue; }
+      if (!avail.length) { gridH[r*gcols2+c] = null; continue; }
+      const la = gm.LAT_MIN+r*gm.DLAT, lo = gm.LON_MIN+c*gm.DLON;
+      let best = avail[0], bd = Infinity;
+      for (let ai=0; ai<avail.length; ai++) {
+        const a = avail[ai], d = (a.la-la)*(a.la-la)+(a.lo-lo)*(a.lo-lo);
+        if (d < bd) { bd = d; best = a; }
+      }
+      gridH[r*gcols2+c] = best.h;
+    }
+    cityData._gridH = gridH;
     render(); // 补上云层
   } catch(e) {
     console.error(e);
@@ -312,18 +330,38 @@ function cloudStyle(v) {
   if (v < 75) return [125,135,150, Math.round(95+(v-50)/25*30)];   // 多云：中灰
   return [85,95,110, Math.round(125+(v-75)/25*25)];             // 浓云：深灰（不发黑）
 }
-// 连续云量阴影：细网格双线性插值 + canvas 渲染为一张半透明图层
+// 有机云纹理：多 octave value noise，让云呈现真实轮廓而非直线/团块
+function hash2(x, y) { const h = Math.sin(x*127.1+y*311.7)*43758.5453; return h-Math.floor(h); }
+function vnoise(x, y) {
+  const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+  const a=hash2(xi,yi), b=hash2(xi+1,yi), c=hash2(xi,yi+1), d=hash2(xi+1,yi+1);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;
+}
+let _nz = null;
+function noiseField(W, H) {
+  if (_nz && _nz.w===W && _nz.h===H) return _nz.f;
+  const f = new Float32Array(W*H);
+  for (let py=0; py<H; py++) for (let qx=0; qx<W; qx++)
+    f[py*W+qx] = vnoise(qx*0.018+13.7, py*0.018+7.3)*0.55
+               + vnoise(qx*0.045+3.1,  py*0.045+9.2)*0.30
+               + vnoise(qx*0.11+5.5,   py*0.11+1.7)*0.15;
+  _nz = {w:W, h:H, f};
+  return f;
+}
+// 连续云量阴影：细网格双线性插值 + 分形噪声云纹 + canvas 渲染为半透明图层
 function renderCloud(slotTime) {
   cloudLayer.clearLayers();
-  const grid = cityData._grid, m = cityData._gridMeta;
-  if (!grid || !grid.length || !m) return;
+  const gridH = cityData._gridH, m = cityData._gridMeta;
+  if (!gridH || !gridH.length || !m) return;
   const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = m;
   const vals = new Float32Array(rows*cols);
-  for (let k=0;k<grid.length;k++) {
-    const h = grid[k].h;
-    vals[k] = (h && h.cloudcover) ? (h.cloudcover[idxOf(h.time, slotTime)] ?? 0) : 0;
+  for (let k=0;k<gridH.length;k++) {
+    const h = gridH[k];
+    vals[k] = h ? (h.cloudcover[idxOf(h.time, slotTime)] ?? 0) : 0;
   }
   const W = 800, H = 590;
+  const nz = noiseField(W, H);
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const ctx = cv.getContext("2d");
   const img = ctx.createImageData(W, H), px = img.data;
@@ -337,7 +375,10 @@ function renderCloud(slotTime) {
       const c0 = Math.floor(c), fc = c-c0, c1 = Math.min(c0+1, cols-1);
       const v = vals[r0*cols+c0]*(1-fr)*(1-fc) + vals[r0*cols+c1]*(1-fr)*fc
               + vals[r1*cols+c0]*fr*(1-fc)     + vals[r1*cols+c1]*fr*fc;
-      const st = cloudStyle(v);
+      // 云纹扰动：幅度与云量成正比，晴空保持干净，云区呈现有机轮廓
+      let ve = v + (nz[py*W+qx]-0.5)*44*(v/100);
+      ve = ve<0?0:(ve>100?100:ve);
+      const st = cloudStyle(ve);
       if (st) {
         const o = (py*W+qx)*4;
         px[o]=st[0]; px[o+1]=st[1]; px[o+2]=st[2]; px[o+3]=st[3];
