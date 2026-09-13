@@ -58,6 +58,7 @@
     <div class="row"><span class="dot" style="border-color:#f97316"></span>40–70%</div>
     <div class="row"><span class="dot" style="border-color:#ef4444"></span>≥70%</div>
     <div class="row" style="color:#64748b">圆圈颜色 = 降水概率</div>
+    <div class="row" style="color:#64748b">灰色阴影 = 云量（越深云越多）</div>
     <div class="row"><button id="radarBtn" style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">🛰 雷达回波（实况）</button></div>
   </div>
 </div>
@@ -83,7 +84,8 @@ const CITIES = [
   ["Port Angeles",48.1181,-123.4307],["Forks",47.9506,-124.3856],["Ocean Shores",46.9736,-124.1549],
   ["Shelton",47.2151,-123.1007],["Centralia",46.7162,-122.9543],["Vancouver WA",45.6387,-122.6615],
   ["Portland",45.5152,-122.6784],["Hood River",45.7054,-121.5215],["Cannon Beach",45.8918,-123.9615],
-  ["Vancouver BC",49.2827,-123.1207],["Victoria",48.4284,-123.3656]
+  ["Vancouver BC",49.2827,-123.1207],["Victoria",48.4284,-123.3656],
+  ["Whistler",50.1163,-122.9574],["Salem OR",44.9429,-123.0351],["Eugene OR",44.0521,-123.0868],["Coeur d'Alene",47.6777,-116.7805]
 ];
 const WMO = {0:["☀️","晴"],1:["🌤️","大致晴"],2:["⛅","多云"],3:["☁️","阴"],45:["🌫️","雾"],48:["🌫️","雾凇"],
   51:["🌦️","毛毛雨"],53:["🌦️","毛毛雨"],55:["🌧️","密毛毛雨"],56:["🌧️","冻毛毛雨"],57:["🌧️","冻毛毛雨"],
@@ -92,12 +94,12 @@ const WMO = {0:["☀️","晴"],1:["🌤️","大致晴"],2:["⛅","多云"],3:[
   80:["🌧️","阵雨"],81:["🌧️","阵雨"],82:["⛈️","强阵雨"],95:["⛈️","雷阵雨"],96:["⛈️","雷暴冰雹"],99:["⛈️","雷暴冰雹"]};
 const probColor = p => p < 20 ? "#22c55e" : p < 40 ? "#eab308" : p < 70 ? "#f97316" : "#ef4444";
 
-const map = L.map("map").setView([47.35, -121.3], 7);
+const map = L.map("map").setView([47.0, -120.6], 6);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution:"© OpenStreetMap"}).addTo(map);
 const cityLayer = L.layerGroup().addTo(map);
 const cloudLayer = L.layerGroup().addTo(map);
 let radarLayer = null, radarOn = false;
-L.control.layers(null, {"城市天气": cityLayer, "云量覆盖（预报）": cloudLayer}, {collapsed: false}).addTo(map);
+L.control.layers(null, {"城市天气": cityLayer, "云量阴影（预报）": cloudLayer}, {collapsed: false}).addTo(map);
 async function toggleRadar() {
   radarOn = !radarOn;
   document.getElementById("radarBtn").classList.toggle("on", radarOn);
@@ -170,16 +172,19 @@ async function loadData() {
       });
     });
     // 2) cloud grid
+    const LAT_MIN=43.8, LAT_MAX=50.3, LON_MIN=-124.8, LON_MAX=-116.0, DLAT=0.35, DLON=0.4;
+    const grows = Math.floor((LAT_MAX-LAT_MIN)/DLAT)+1, gcols = Math.floor((LON_MAX-LON_MIN)/DLON)+1;
     const pts = [];
-    for (let la=45.4; la<=49.5; la+=0.45) for (let lo=-124.6; lo<=-117.0; lo+=0.55) pts.push([+la.toFixed(2), +lo.toFixed(2)]);
-    const gridRes = await Promise.all(chunk(pts,40).map(g => {
+    for (let r=0;r<grows;r++) for (let c=0;c<gcols;c++) pts.push([+(LAT_MIN+r*DLAT).toFixed(2), +(LON_MIN+c*DLON).toFixed(2)]);
+    cityData._gridMeta = {rows:grows, cols:gcols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON};
+    const gridRes = await Promise.all(chunk(pts,50).map(g => {
       const lat = g.map(x=>x[0]).join(","), lon = g.map(x=>x[1]).join(",");
       return fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloudcover&timezone=America%2FLos_Angeles&forecast_days=3`).then(r=>r.json());
     }));
     const grid = [];
     gridRes.forEach((arr, gi) => {
       (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
-        const p = chunk(pts,40)[gi][k];
+        const p = chunk(pts,50)[gi][k];
         grid.push({lat:p[0], lon:p[1], h: loc.hourly});
       });
     });
@@ -193,6 +198,38 @@ async function loadData() {
     document.getElementById("errbar").style.display = "block";
   }
   document.getElementById("loading").style.display = "none";
+}
+
+// 连续云量阴影：双线性插值 + canvas 渲染为一张半透明灰色图层
+function renderCloud(slotTime) {
+  cloudLayer.clearLayers();
+  const grid = cityData._grid, m = cityData._gridMeta;
+  if (!grid || !grid.length || !m) return;
+  const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = m;
+  const vals = new Float32Array(rows*cols);
+  for (let k=0;k<grid.length;k++) vals[k] = grid[k].h.cloudcover[idxOf(grid[k].h.time, slotTime)] ?? 0;
+  const W = 600, H = 440;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d");
+  const img = ctx.createImageData(W, H), px = img.data;
+  for (let py=0; py<H; py++) {
+    const lat = LAT_MAX - (py+0.5)/H*(LAT_MAX-LAT_MIN);
+    let r = (lat-LAT_MIN)/DLAT; r = r<0?0:(r>rows-1.001?rows-1.001:r);
+    const r0 = Math.floor(r), fr = r-r0, r1 = Math.min(r0+1, rows-1);
+    for (let qx=0; qx<W; qx++) {
+      const lon = LON_MIN + (qx+0.5)/W*(LON_MAX-LON_MIN);
+      let c = (lon-LON_MIN)/DLON; c = c<0?0:(c>cols-1.001?cols-1.001:c);
+      const c0 = Math.floor(c), fc = c-c0, c1 = Math.min(c0+1, cols-1);
+      const v = vals[r0*cols+c0]*(1-fr)*(1-fc) + vals[r0*cols+c1]*(1-fr)*fc
+              + vals[r1*cols+c0]*fr*(1-fc)     + vals[r1*cols+c1]*fr*fc;
+      if (v >= 8) {
+        const o = (py*W+qx)*4;
+        px[o]=45; px[o+1]=58; px[o+2]=78; px[o+3]=Math.round(v/100*150);
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  L.imageOverlay(cv.toDataURL(), [[LAT_MIN,LON_MIN],[LAT_MAX,LON_MAX]], {interactive:false}).addTo(cloudLayer);
 }
 
 function render() {
@@ -216,14 +253,8 @@ function render() {
       `<b>${c.name}</b><br>${emoji} ${desc}<br>🌡 ${Math.round(c.temp)}°C (${f}°F)<br>☔ 降水概率 ${c.prob}%${c.cc!=null?`<br>☁️ 云量 ${c.cc}%`:""}<br><span style="color:#64748b;font-size:12px">${s.label} ${s.sub}</span>`
     ).addTo(cityLayer);
   });
-  // cloud cover grid
-  const grid = cityData._grid || [];
-  grid.forEach(g => {
-    const i = idxOf(g.h.time, s.time);
-    const cc = g.h.cloudcover[i] ?? 0;
-    if (cc < 12) return;
-    L.circle([g.lat,g.lon],{radius:26000, stroke:false, fillColor:"#475569", fillOpacity: cc/100*0.45}).addTo(cloudLayer);
-  });
+  // 连续云量阴影（云越多颜色越深，全晴则透明）
+  renderCloud(s.time);
   // driest list
   const dry = [...rows].sort((a,b)=>a.prob-b.prob).slice(0,10);
   document.getElementById("dryTitle").textContent = `${s.label}（${s.sub}）最干燥的 10 个地方`;
