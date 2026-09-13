@@ -82,77 +82,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const CITIES = [
-  ["Bellevue",47.6101,-122.2015,true],["Seattle",47.6062,-122.3321],["Redmond",47.6740,-122.1215],
-  ["Kirkland",47.6769,-122.2060],["Issaquah",47.5301,-122.0326],["Sammamish",47.6163,-122.0356],
-  ["Renton",47.4829,-122.2171],["Tacoma",47.2529,-122.4443],["Olympia",47.0379,-122.9007],
-  ["Everett",47.9790,-122.2021],["Lynnwood",47.8209,-122.3151],["Marysville",48.0518,-122.1771],
-  ["Bellingham",48.7519,-122.4787],["Snoqualmie",47.5287,-121.8254],["North Bend",47.4958,-121.7864],
-  ["Cle Elum",47.1954,-120.9373],["Ellensburg",46.9965,-120.5478],["Yakima",46.6021,-120.5059],
-  ["Wenatchee",47.4235,-120.3103],["Leavenworth",47.5962,-120.6615],["Chelan",47.8412,-120.0194],
-  ["Winthrop",48.4772,-120.1787],["Kennewick",46.2112,-119.1372],["Spokane",47.6588,-117.4260],
-  ["Moses Lake",47.1301,-119.2781],["Walla Walla",46.0650,-118.3301],["Sequim",48.0790,-123.1026],
-  ["Port Angeles",48.1181,-123.4307],["Forks",47.9506,-124.3856],["Ocean Shores",46.9736,-124.1549],
-  ["Shelton",47.2151,-123.1007],["Centralia",46.7162,-122.9543],["Vancouver WA",45.6387,-122.6615],
-  ["Portland",45.5152,-122.6784],["Hood River",45.7054,-121.5215],["Cannon Beach",45.8918,-123.9615],
-  ["Vancouver BC",49.2827,-123.1207],["Victoria",48.4284,-123.3656],
-  ["Whistler",50.1163,-122.9574],["Salem OR",44.9429,-123.0351],["Eugene OR",44.0521,-123.0868],["Coeur d'Alene",47.6777,-116.7805]
-];
-const TIPS = {
-"Bellevue":{hike:"Coal Creek Trail 林间溪流步道，轻松好走",spot:"Bellevue Downtown Park 瀑布喷泉大草坪",paddle:"Lake Washington 湖面开阔，桨板热门"},
-"Seattle":{hike:"Discovery Park Loop 环线看海观灯塔",spot:"Pike Place Market 派克市场必逛地标",paddle:"Lake Union 城市湖景桨板皮划艇"},
-"Redmond":{hike:"Sammamish River Trail 沿河绿道轻松",spot:"Marymoor Park 大草坪音乐会攀岩墙",paddle:"Lake Sammamish 湖面平静适合桨板"},
-"Kirkland":{hike:"Juanita Bay Park 湖畔木栈道观鸟",spot:"Kirkland Marina 湖畔码头商业街",paddle:"Lake Washington 桨板皮划艇热门下水点"},
-"Issaquah":{hike:"Poo Poo Point 看滑翔伞观湖，中等",spot:"Lake Sammamish State Park 湖滨沙滩野餐",climb:"Exit 32 / Deception Crags I-90旁运动攀岩",paddle:"Lake Sammamish 湖面平静适合桨板"},
-"Sammamish":{hike:"East Lake Sammamish Trail 湖东岸湖畔绿道",spot:"Pine Lake Park 湖滨沙滩游泳",paddle:"Lake Sammamish 桨板皮划艇热门湖"},
-"Renton":{hike:"Cedar River Trail 沿河17英里绿道",spot:"Gene Coulon Beach Park 湖滨公园看日落",paddle:"Lake Washington 南湾桨板皮划艇"},
-"Tacoma":{hike:"Point Defiance Park 环园步道看海",spot:"Museum of Glass 玻璃桥看吹玻璃",paddle:"Commencement Bay 湾内皮划艇看天际线"},
-"Olympia":{hike:"Mima Falls Loop 州立森林瀑布环线",spot:"Tumwater Falls Park 瀑布群三文鱼梯",paddle:"Budd Inlet 海湾皮划艇"},
-"Everett":{hike:"Spencer Island 湿地观鸟步道",spot:"Jetty Island 轮渡人工岛海滩",paddle:"Port Gardner Bay 海湾桨板"},
-"Lynnwood":{hike:"Scriber Lake Nature Trail 湖畔木栈道环线",spot:"Heritage Park 历史建筑怀旧园区"},
-"Marysville":{hike:"Ebey Waterfront Trail 河口湿地观鸟步道",spot:"Ebey Waterfront Park 滨水公园游船码头",paddle:"Ebey Slough 河口皮划艇观鸟"},
-"Bellingham":{hike:"Oyster Dome Trail 俯瞰海湾群岛，中等",spot:"Whatcom Falls Park 瀑布石桥公园",paddle:"Lake Whatcom 湖面桨板皮划艇"},
-"Snoqualmie":{hike:"Rattlesnake Ledge 俯瞰湖泊山谷，中等",spot:"Snoqualmie Falls 82米瀑布观景台",climb:"Little Si / Exit 32 运动攀岩岩场",paddle:"Rattlesnake Lake 湖面平静适合桨板"},
-"North Bend":{hike:"Rattlesnake Ledge 俯瞰湖泊的经典山脊线",spot:"Snoqualmie Falls 270 英尺高的著名瀑布",climb:"Exit 38 线路众多的运动攀岩区",paddle:"Rattlesnake Lake 平静无机动船的湖泊"},
-"Cle Elum":{hike:"Rachel Lake 高山湖群，略有挑战",spot:"Roslyn 《北国风云》取景小镇",paddle:"Lake Kachess 雪山环抱的划桨湖"},
-"Ellensburg":{hike:"Umtanum Creek 看大角羊的峡谷溪流步道",spot:"Wild Horse Wind Farm 可进风机内部参观",climb:"Frenchman Coulee 玄武岩柱的攀岩圣地",paddle:"Yakima River 漂流皮划艇的经典河段"},
-"Yakima":{hike:"Cowiche Canyon 旧铁路改建的峡谷步道",spot:"Yakima Valley 华州历史最久的葡萄酒乡",climb:"Royal Columns 玄武岩柱攀岩区",paddle:"Yakima River 水流平缓适合新手"},
-"Wenatchee":{hike:"Saddle Rock 俯瞰城市与哥伦比亚河",spot:"Ohme Gardens 山坡上的石砌花园",paddle:"Columbia River 宽阔平静的大河水面"},
-"Leavenworth":{hike:"Colchuck Lake 蓝绿色高山湖泊",spot:"Bavarian Village 德式风情的巴伐利亚小镇",climb:"Icicle Creek 花岗岩峡谷攀岩胜地",paddle:"Wenatchee River 可漂流的清澈河流"},
-"Chelan":{hike:"Echo Ridge 俯瞰湖泊的步道网络",spot:"Lake Chelan 全长 80 公里的冰川湖",paddle:"Lake Chelan 湖面开阔适合长划"},
-"Winthrop":{hike:"Blue Lake Trail 冰川湖与花岗岩峰",spot:"Washington Pass Overlook 北喀斯喀特观景点",paddle:"Pearrygin Lake 可租桨板的平静湖泊"},
-"Kennewick":{hike:"Badger Mountain 俯瞰三城的山脊步道",spot:"Sacajawea State Park 两河交汇的历史公园",paddle:"Columbia River 宽阔水面适合长距离"},
-"Spokane":{hike:"Bowl and Pitcher 吊桥与玄武岩的环线",spot:"Riverfront Park 市中心瀑布公园",climb:"Minnehaha 市区经典抱石攀岩区",paddle:"Long Lake 平静水库适合新手"},
-"Moses Lake":{hike:"Ancient Lakes 荒漠峡谷中的湖群步道",spot:"Potholes State Park 水鸟众多的水库公园",climb:"Frenchman Coulee 冰川洪水形成的攀岩区",paddle:"Moses Lake 湖面宽阔水上运动多"},
-"Walla Walla":{hike:"Bennington Lake 环湖平缓的观鸟步道",spot:"Whitman Mission 俄勒冈小径历史遗址",paddle:"Bennington Lake 只允许桨力船的湖"},
-"Sequim":{hike:"Dungeness Spit 全美最长的天然沙嘴",spot:"Lavender Farms 夏季盛开的薰衣草田",paddle:"Sequim Bay 风平浪静的海湾"},
-"Port Angeles":{hike:"Marymere Falls 老林中的 90 英尺瀑布",spot:"Hurricane Ridge 俯瞰奥林匹克群山",paddle:"Lake Crescent 清澈冰川湖划船"},
-"Forks":{hike:"Hall of Mosses Trail 雨林苔藓奇观",spot:"Rialto Beach 海蚀拱门潮池"},
-"Ocean Shores":{hike:"Perkins Pond Nature Trail 林间观鸟散步",spot:"Ocean City State Park 海滩湿地观野生动物"},
-"Shelton":{hike:"Kennedy Falls Trail 瀑布林间徒步",spot:"Harstine Island State Park 海岛公园观海",paddle:"Hammersley Inlet 潮流强劲需经验"},
-"Centralia":{hike:"Canyon Trail 市区自然保护区",spot:"Centralia Square Antiques 历史街区古董店淘宝"},
-"Vancouver WA":{hike:"Lacamas Heritage Trail 湖畔瀑布野花",spot:"Fort Vancouver National Historic Site 历史遗址探访",climb:"Beacon Rock 哥伦比亚河谷攀岩",paddle:"Vancouver Lake 平静湖面划船"},
-"Portland":{hike:"Wildwood Trail 城市森林步道",spot:"Pittock Mansion 俯瞰全城庄园",climb:"Broughton Bluff 玄武岩攀岩场",paddle:"Willamette River 穿城划桨观景"},
-"Hood River":{hike:"Tamanawas Falls Trail 穿林抵达百尺瀑布",spot:"Hood River Waterfront Park 滨水公园看风帆冲浪",paddle:"Columbia River 峡谷风浪划板"},
-"Cannon Beach":{hike:"Tillamook Head Trail 海岸林间步道",spot:"Haystack Rock 标志性海蚀柱潮池"},
-"Vancouver BC":{hike:"Grouse Grind 台阶爬升挑战",spot:"Stanley Park 海墙骑行漫步",climb:"Stawamus Chief 世界级花岗岩"},
-"Victoria":{hike:"Mount Douglas Park 登顶360度俯瞰全城",spot:"Butchart Gardens 世界级主题花园",paddle:"Oak Bay 海湾皮划艇观海"},
-"Whistler":{hike:"Panorama Ridge 俯瞰碧绿冰川湖",spot:"Peak 2 Peak Gondola 世界最长缆车",paddle:"Alta Lake 湖畔租板划船"},
-"Salem OR":{hike:"Trail of Ten Falls 十瀑布经典环线",spot:"Silver Falls State Park 俄州最大州立公园"},
-"Eugene OR":{hike:"Spencer Butte 登顶看三姐妹峰",spot:"Hayward Field 田径圣地巡礼",paddle:"Fern Ridge Reservoir 湖面划船观鸟"},
-"Coeur d'Alene":{hike:"Tubbs Hill 湖畔森林环线",spot:"Floating Boardwalk 世界最长浮桥",paddle:"Lake Coeur d'Alene 大湖划船桨板"},
-};
-
-function tipHtml(name) {
-  const t = TIPS[name]; if (!t) return "";
-  const parts = [];
-  if (t.hike) parts.push("🥾 " + t.hike);
-  if (t.spot) parts.push("📍 " + t.spot);
-  if (t.climb) parts.push("🧗 " + t.climb);
-  if (t.paddle) parts.push("🛶 " + t.paddle);
-  return parts.join("<br>");
-}
-
+// 城市天气 + 好玩推荐全部由服务器 /api/weather 下发（服务器每 30 分钟缓存更新）
 const WMO = {0:["☀️","晴"],1:["🌤️","大致晴"],2:["⛅","多云"],3:["☁️","阴"],45:["🌫️","雾"],48:["🌫️","雾凇"],
   51:["🌦️","毛毛雨"],53:["🌦️","毛毛雨"],55:["🌧️","密毛毛雨"],56:["🌧️","冻毛毛雨"],57:["🌧️","冻毛毛雨"],
   61:["🌧️","小雨"],63:["🌧️","中雨"],65:["🌧️","大雨"],66:["🌧️","冻雨"],67:["🌧️","冻雨"],
@@ -183,24 +113,9 @@ async function toggleRadar() {
   else if (radarOn) { radarOn = false; document.getElementById("radarBtn").classList.remove("on"); }
 }
 
-function laDate(offsetDays) {
-  const now = new Date(new Date().toLocaleString("en-US",{timeZone:"America/Los_Angeles"}));
-  now.setDate(now.getDate() + offsetDays);
-  return now;
-}
-const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-const wk = d => "周" + ["日","一","二","三","四","五","六"][d.getDay()];
-
 let slots = [], activeSlot = 0, cityData = [];
+let gridP = null, gridMeta = null; // 服务端降雨概率网格 flat 数组 rows*cols*4
 function buildSlots() {
-  const t1 = laDate(1), t2 = laDate(2);
-  const f = d => `${d.getMonth()+1}/${d.getDate()}`;
-  slots = [
-    {label:"明天上午", sub:`${f(t1)} ${wk(t1)}`, time: ymd(t1)+"T09:00"},
-    {label:"明天下午", sub:`${f(t1)} ${wk(t1)}`, time: ymd(t1)+"T15:00"},
-    {label:"后天上午", sub:`${f(t2)} ${wk(t2)}`, time: ymd(t2)+"T09:00"},
-    {label:"后天下午", sub:`${f(t2)} ${wk(t2)}`, time: ymd(t2)+"T15:00"},
-  ];
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = "";
   slots.forEach((s,i) => {
@@ -211,110 +126,27 @@ function buildSlots() {
     tabs.appendChild(b);
   });
 }
-function idxOf(times, t) {
-  let i = times.indexOf(t);
-  if (i >= 0) return i;
-  let best = 0, bd = 1e18;
-  times.forEach((x,k) => { const d = Math.abs(new Date(x) - new Date(t)); if (d < bd) { bd = d; best = k; } });
-  return best;
-}
-const chunk = (a,n) => { const r=[]; for(let i=0;i<a.length;i+=n) r.push(a.slice(i,i+n)); return r; };
-
-// 并发限制 + 失败重试：一次只发少量请求，避免被天气接口限流
-async function fetchLimited(tasks, limit) {
-  const out = new Array(tasks.length);
-  let i = 0;
-  async function worker() {
-    while (i < tasks.length) {
-      const k = i++;
-      try { out[k] = await tasks[k](); } catch(e) { out[k] = null; }
-    }
-  }
-  await Promise.all(Array.from({length: Math.min(limit, tasks.length)}, worker));
-  return out;
-}
-async function fetchJsonRetry(url, tries) {
-  tries = tries || 2;
-  for (let a = 0; a < tries; a++) {
-    try {
-      const r = await fetch(url);
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const j = await r.json();
-      if (j.error) throw new Error(j.reason || "api error");
-      return j;
-    } catch(e) { if (a === tries-1) throw e; await new Promise(r => setTimeout(r, 900)); }
-  }
-}
-
 async function loadData() {
   lastLoad = Date.now(); nextRefresh = lastLoad + 30*60*1000;
   document.getElementById("loading").style.display = "flex";
   document.getElementById("errbar").style.display = "none";
   try {
-    // 1) 城市天气优先加载
-    const cityChunks = chunk(CITIES, 20);
-    const cityUrls = cityChunks.map(c => {
-      const lat = c.map(x=>x[1]).join(","), lon = c.map(x=>x[2]).join(",");
-      return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,weathercode,cloudcover&timezone=America%2FLos_Angeles&forecast_days=3&temperature_unit=celsius`;
-    });
-    const cityRes = await fetchLimited(cityUrls.map(u => () => fetchJsonRetry(u)), 3);
-    const cities = [];
-    cityRes.forEach((arr, ci) => {
-      if (!arr) return;
-      (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
-        if (!loc || !loc.hourly) return;
-        const c = cityChunks[ci][k];
-        cities.push({name:c[0], lat:c[1], lon:c[2], home:!!c[3], h: loc.hourly});
-      });
-    });
-    if (!cities.length) throw new Error("no city data");
-    cityData = cities;
+    // 所有数据走自家服务器：/api/weather（服务器每 30 分钟抓一次 Open-Meteo 并缓存，
+    // 未过期直接给缓存；客户端不再直连天气接口）
+    const r = await fetch("/api/weather");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    if (j.error || !j.cities || !j.cities.length) throw new Error(j.error || "no data");
+    slots = j.slots;
+    if (activeSlot >= slots.length) activeSlot = 0;
+    cityData = j.cities;
+    gridMeta = j.grid.meta;
+    gridP = j.grid.p;
     buildSlots();
-    render(); // 先画城市，云层随后补上
-    const t = new Date().toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
+    render();
+    const t = new Date(j.updated_at*1000).toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
     document.getElementById("updated").textContent = "数据更新于 " + t + "（洛杉矶时间）";
     document.getElementById("loading").style.display = "none";
-    // 2) 降雨概率网格：限流并发、容忍部分失败，不阻塞城市显示
-    const LAT_MIN=43.8, LAT_MAX=50.3, LON_MIN=-124.8, LON_MAX=-116.0, DLAT=0.2, DLON=0.25;
-    const grows = Math.floor((LAT_MAX-LAT_MIN)/DLAT)+1, gcols = Math.floor((LON_MAX-LON_MIN)/DLON)+1;
-    const pts = [];
-    for (let r=0;r<grows;r++) for (let c=0;c<gcols;c++) pts.push([+(LAT_MIN+r*DLAT).toFixed(2), +(LON_MIN+c*DLON).toFixed(2)]);
-    cityData._gridMeta = {rows:grows, cols:gcols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON};
-    const gchunks = chunk(pts, 80);
-    const gurls = gchunks.map(g => {
-      const lat = g.map(x=>x[0]).join(","), lon = g.map(x=>x[1]).join(",");
-      return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation_probability&timezone=America%2FLos_Angeles&forecast_days=3`;
-    });
-    const gridRes = await fetchLimited(gurls.map(u => () => fetchJsonRetry(u)), 4);
-    // 用经纬度 key 组装网格；缺失点用最近可用点回填，避免整体错位
-    const gridMap = new Map();
-    gridRes.forEach((arr, gi) => {
-      if (!arr) return;
-      (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
-        if (!loc || !loc.hourly) return;
-        const p = gchunks[gi][k];
-        gridMap.set(p[0].toFixed(2)+","+p[1].toFixed(2), loc.hourly);
-      });
-    });
-    const gm = cityData._gridMeta, grows2 = gm.rows, gcols2 = gm.cols;
-    const avail = [];
-    gridMap.forEach((h, key) => { const s = key.split(","); avail.push({la:+s[0], lo:+s[1], h}); });
-    const gridH = new Array(grows2*gcols2);
-    for (let r=0;r<grows2;r++) for (let c=0;c<gcols2;c++) {
-      const key = (gm.LAT_MIN+r*gm.DLAT).toFixed(2)+","+(gm.LON_MIN+c*gm.DLON).toFixed(2);
-      const h = gridMap.get(key);
-      if (h) { gridH[r*gcols2+c] = h; continue; }
-      if (!avail.length) { gridH[r*gcols2+c] = null; continue; }
-      const la = gm.LAT_MIN+r*gm.DLAT, lo = gm.LON_MIN+c*gm.DLON;
-      let best = avail[0], bd = Infinity;
-      for (let ai=0; ai<avail.length; ai++) {
-        const a = avail[ai], d = (a.la-la)*(a.la-la)+(a.lo-lo)*(a.lo-lo);
-        if (d < bd) { bd = d; best = a; }
-      }
-      gridH[r*gcols2+c] = best.h;
-    }
-    cityData._gridH = gridH;
-    render(); // 补上云层
   } catch(e) {
     console.error(e);
     document.getElementById("errbar").style.display = "block";
@@ -343,22 +175,32 @@ function noiseField(W, H) {
   if (_nz && _nz.w===W && _nz.h===H) return _nz.f;
   const f = new Float32Array(W*H);
   for (let py=0; py<H; py++) for (let qx=0; qx<W; qx++)
-    f[py*W+qx] = vnoise(qx*0.018+13.7, py*0.018+7.3)*0.55
-               + vnoise(qx*0.045+3.1,  py*0.045+9.2)*0.30
-               + vnoise(qx*0.11+5.5,   py*0.11+1.7)*0.15;
+    f[py*W+qx] = vnoise(qx*0.016+13.7, py*0.016+7.3)*0.7
+               + vnoise(qx*0.04+3.1,  py*0.04+9.2)*0.3;
   _nz = {w:W, h:H, f};
   return f;
 }
 // 连续降雨概率阴影：细网格双线性插值 + 分形噪声雨带纹理 + canvas 半透明图层
-function renderRain(slotTime) {
+function renderRain(slotIdx) {
   rainLayer.clearLayers();
-  const gridH = cityData._gridH, m = cityData._gridMeta;
-  if (!gridH || !gridH.length || !m) return;
-  const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = m;
-  const vals = new Float32Array(rows*cols);
-  for (let k=0;k<gridH.length;k++) {
-    const h = gridH[k];
-    vals[k] = h ? (h.precipitation_probability[idxOf(h.time, slotTime)] ?? 0) : 0;
+  if (!gridP || !gridMeta) return;
+  const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = gridMeta;
+  let vals = new Float32Array(rows*cols);
+  for (let k=0;k<rows*cols;k++) {
+    vals[k] = gridP[k*4+slotIdx] ?? 0;
+  }
+  // 平滑：3x3 均值滤波两遍，抹掉单点尖峰，让雨带连成一片而非一个个圆圈
+  for (let pass=0; pass<2; pass++) {
+    const nv = new Float32Array(rows*cols);
+    for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
+      let s=0, n=0;
+      for (let dr=-1;dr<=1;dr++) for (let dc=-1;dc<=1;dc++) {
+        const rr=r+dr, cc=c+dc;
+        if (rr>=0 && rr<rows && cc>=0 && cc<cols) { s += vals[rr*cols+cc]; n++; }
+      }
+      nv[r*cols+c] = s/n;
+    }
+    vals = nv;
   }
   const W = 800, H = 590;
   const nz = noiseField(W, H);
@@ -376,7 +218,7 @@ function renderRain(slotTime) {
       const v = vals[r0*cols+c0]*(1-fr)*(1-fc) + vals[r0*cols+c1]*(1-fr)*fc
               + vals[r1*cols+c0]*fr*(1-fc)     + vals[r1*cols+c1]*fr*fc;
       // 雨带纹理扰动：幅度与概率成正比，无雨区保持干净，雨区呈现有机轮廓
-      let ve = v + (nz[py*W+qx]-0.5)*44*(v/100);
+      let ve = v + (nz[py*W+qx]-0.5)*14*(v/100);
       ve = ve<0?0:(ve>100?100:ve);
       const st = rainStyle(ve);
       if (st) {
@@ -394,10 +236,10 @@ function render() {
   cityLayer.clearLayers();
   rainLayer.clearLayers();
   const rows = cityData.map(c => {
-    const i = idxOf(c.h.time, s.time);
-    return {...c, i,
-      temp: c.h.temperature_2m[i], prob: c.h.precipitation_probability[i] ?? 0,
-      code: c.h.weathercode[i], cc: c.h.cloudcover ? c.h.cloudcover[i] : null};
+    const v = c.slots[activeSlot] || {};
+    return {...c,
+      temp: v.t, prob: v.prob ?? 0,
+      code: v.code, cc: v.cc};
   });
   rows.forEach(c => {
     const [emoji, desc] = WMO[c.code] || ["❓","未知"];
@@ -406,13 +248,13 @@ function render() {
       html:`<div class="badge" style="--c:${color}"><span>${emoji}</span><span class="t">${Math.round(c.temp)}°</span></div><div class="n">${c.home?"★ ":""}${c.name}</div>`,
       iconSize:[70,52], iconAnchor:[35,26]});
     const f = Math.round(c.temp*9/5+32);
-    const tip = tipHtml(c.name);
+    const tip = c.tip || "";
     L.marker([c.lat,c.lon],{icon}).bindPopup(
       `<b>${c.name}</b><br>${emoji} ${desc}<br>🌡 ${Math.round(c.temp)}°C (${f}°F)<br>☔ 降水概率 ${c.prob}%${c.cc!=null?`<br>☁️ 云量 ${c.cc}%`:""}${tip?`<br><br>🎡 好玩推荐<br><span style="font-size:12.5px;line-height:1.7">${tip}</span>`:""}<br><span style="color:#64748b;font-size:12px">${s.label} ${s.sub}</span>`
     ).addTo(cityLayer);
   });
   // 连续降雨概率阴影
-  renderRain(s.time);
+  renderRain(activeSlot);
   // 哪里不下雨：基本不下雨（<5%）和概率低（5–20%）分成两组
   document.getElementById("dryTitle").textContent = `哪里不下雨？（${s.label} ${s.sub}）`;
   const box = document.getElementById("dryList");
@@ -421,7 +263,7 @@ function render() {
     const [emoji, desc] = WMO[c.code] || ["❓","未知"];
     const el = document.createElement("div");
     el.className = "dryrow";
-    const tip = tipHtml(c.name);
+    const tip = c.tip || "";
     el.innerHTML = `<div class="r1"><span class="n">${c.home?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p" style="color:${probColor(c.prob)}">${c.prob}%</span></div>${tip?`<div class="tips">${tip}</div>`:""}`;
     el.onclick = () => map.flyTo([c.lat,c.lon], 9, {duration:.8});
     return el;
