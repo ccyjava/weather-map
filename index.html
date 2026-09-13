@@ -163,50 +163,87 @@ function idxOf(times, t) {
 }
 const chunk = (a,n) => { const r=[]; for(let i=0;i<a.length;i+=n) r.push(a.slice(i,i+n)); return r; };
 
+// 并发限制 + 失败重试：一次只发少量请求，避免被天气接口限流
+async function fetchLimited(tasks, limit) {
+  const out = new Array(tasks.length);
+  let i = 0;
+  async function worker() {
+    while (i < tasks.length) {
+      const k = i++;
+      try { out[k] = await tasks[k](); } catch(e) { out[k] = null; }
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(limit, tasks.length)}, worker));
+  return out;
+}
+async function fetchJsonRetry(url, tries) {
+  tries = tries || 2;
+  for (let a = 0; a < tries; a++) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      if (j.error) throw new Error(j.reason || "api error");
+      return j;
+    } catch(e) { if (a === tries-1) throw e; await new Promise(r => setTimeout(r, 900)); }
+  }
+}
+
 async function loadData() {
   document.getElementById("loading").style.display = "flex";
   document.getElementById("errbar").style.display = "none";
   try {
-    // 1) cities
+    // 1) 城市天气优先加载
     const cityChunks = chunk(CITIES, 20);
-    const cityRes = await Promise.all(cityChunks.map(c => {
+    const cityUrls = cityChunks.map(c => {
       const lat = c.map(x=>x[1]).join(","), lon = c.map(x=>x[2]).join(",");
-      return fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,weathercode,cloudcover&timezone=America%2FLos_Angeles&forecast_days=3&temperature_unit=celsius`).then(r=>r.json());
-    }));
-    cityData = [];
+      return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability,weathercode,cloudcover&timezone=America%2FLos_Angeles&forecast_days=3&temperature_unit=celsius`;
+    });
+    const cityRes = await fetchLimited(cityUrls.map(u => () => fetchJsonRetry(u)), 3);
+    const cities = [];
     cityRes.forEach((arr, ci) => {
+      if (!arr) return;
       (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
+        if (!loc || !loc.hourly) return;
         const c = cityChunks[ci][k];
-        cityData.push({name:c[0], lat:c[1], lon:c[2], home:!!c[3], h: loc.hourly});
+        cities.push({name:c[0], lat:c[1], lon:c[2], home:!!c[3], h: loc.hourly});
       });
     });
-    // 2) cloud grid
+    if (!cities.length) throw new Error("no city data");
+    cityData = cities;
+    buildSlots();
+    render(); // 先画城市，云层随后补上
+    const t = new Date().toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
+    document.getElementById("updated").textContent = "数据更新于 " + t + "（洛杉矶时间）";
+    document.getElementById("loading").style.display = "none";
+    // 2) 云量网格：限流并发、容忍部分失败，不阻塞城市显示
     const LAT_MIN=43.8, LAT_MAX=50.3, LON_MIN=-124.8, LON_MAX=-116.0, DLAT=0.2, DLON=0.25;
     const grows = Math.floor((LAT_MAX-LAT_MIN)/DLAT)+1, gcols = Math.floor((LON_MAX-LON_MIN)/DLON)+1;
     const pts = [];
     for (let r=0;r<grows;r++) for (let c=0;c<gcols;c++) pts.push([+(LAT_MIN+r*DLAT).toFixed(2), +(LON_MIN+c*DLON).toFixed(2)]);
     cityData._gridMeta = {rows:grows, cols:gcols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON};
-    const gridRes = await Promise.all(chunk(pts,80).map(g => {
+    const gchunks = chunk(pts, 80);
+    const gurls = gchunks.map(g => {
       const lat = g.map(x=>x[0]).join(","), lon = g.map(x=>x[1]).join(",");
-      return fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloudcover&timezone=America%2FLos_Angeles&forecast_days=3`).then(r=>r.json());
-    }));
+      return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=cloudcover&timezone=America%2FLos_Angeles&forecast_days=3`;
+    });
+    const gridRes = await fetchLimited(gurls.map(u => () => fetchJsonRetry(u)), 4);
     const grid = [];
     gridRes.forEach((arr, gi) => {
+      if (!arr) return;
       (Array.isArray(arr)?arr:[arr]).forEach((loc, k) => {
-        const p = chunk(pts,80)[gi][k];
+        if (!loc || !loc.hourly) return;
+        const p = gchunks[gi][k];
         grid.push({lat:p[0], lon:p[1], h: loc.hourly});
       });
     });
     cityData._grid = grid;
-    buildSlots();
-    render();
-    const t = new Date().toLocaleString("zh-CN",{timeZone:"America/Los_Angeles",hour:"2-digit",minute:"2-digit"});
-    document.getElementById("updated").textContent = "数据更新于 " + t + "（洛杉矶时间）";
+    render(); // 补上云层
   } catch(e) {
     console.error(e);
     document.getElementById("errbar").style.display = "block";
+    document.getElementById("loading").style.display = "none";
   }
-  document.getElementById("loading").style.display = "none";
 }
 
 // 云量 → 颜色/透明度：明暗对比拉满，淡云很浅、浓云近黑
@@ -224,7 +261,10 @@ function renderCloud(slotTime) {
   if (!grid || !grid.length || !m) return;
   const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = m;
   const vals = new Float32Array(rows*cols);
-  for (let k=0;k<grid.length;k++) vals[k] = grid[k].h.cloudcover[idxOf(grid[k].h.time, slotTime)] ?? 0;
+  for (let k=0;k<grid.length;k++) {
+    const h = grid[k].h;
+    vals[k] = (h && h.cloudcover) ? (h.cloudcover[idxOf(h.time, slotTime)] ?? 0) : 0;
+  }
   const W = 800, H = 590;
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const ctx = cv.getContext("2d");
