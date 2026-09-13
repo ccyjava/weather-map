@@ -67,7 +67,7 @@
     <div class="row"><span class="dot" style="border-color:#ef4444"></span>≥70%</div>
     <div class="row" style="color:#64748b">圆圈颜色 = 降水概率</div>
     <div class="row" style="color:#64748b">灰色阴影 = 云量（越深云越多）</div>
-    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(148,163,184,.35), rgba(100,116,139,.65), rgba(71,85,105,.85), rgba(30,41,59,.95))"></span><span style="color:#64748b">少云 → 浓云</span></div>
+    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(190,198,212,.3), rgba(130,143,160,.55), rgba(75,90,110,.8), rgba(12,22,38,.97))"></span><span style="color:#64748b">少云 → 浓云</span></div>
     <div class="row"><button id="radarBtn" style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">🛰 雷达回波（实况）</button></div>
   </div>
 </div>
@@ -209,13 +209,13 @@ async function loadData() {
   document.getElementById("loading").style.display = "none";
 }
 
-// 云量 → 颜色/透明度：分档渐变，云越多越深，对比拉开
+// 云量 → 颜色/透明度：明暗对比拉满，淡云很浅、浓云近黑
 function cloudStyle(v) {
-  if (v < 10) return null;                                    // <10% 近乎晴：透明
-  if (v < 30) return [148,163,184, Math.round(60+(v-10)/20*60)];  // 少云：浅灰
-  if (v < 55) return [100,116,139, Math.round(120+(v-30)/25*60)]; // 多云：中灰
-  if (v < 80) return [71,85,105,  Math.round(180+(v-55)/25*40)];  // 阴：深灰
-  return [30,41,59, Math.round(220+(v-80)/20*35)];             // 浓云：很深
+  if (v < 8) return null;                                     // <8% 近乎晴：透明
+  if (v < 25) return [190,198,212, Math.round(35+(v-8)/17*55)];   // 淡云：很浅
+  if (v < 50) return [130,143,160, Math.round(90+(v-25)/25*60)];  // 少云：浅灰
+  if (v < 75) return [75,90,110,   Math.round(150+(v-50)/25*60)];  // 多云：深灰
+  return [12,22,38, Math.round(210+(v-75)/25*40)];             // 浓云：近黑
 }
 // 连续云量阴影：细网格双线性插值 + canvas 渲染为一张半透明图层
 function renderCloud(slotTime) {
