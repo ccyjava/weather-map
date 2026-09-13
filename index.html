@@ -167,7 +167,13 @@ async function loadData() {
     }
     cityData = j.cities;
     gridMeta = j.grid.meta;
-    gridP = j.grid.p;
+    if (j.grid.enc === "b64") {
+      const bin = atob(j.grid.p);
+      gridP = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) gridP[i] = bin.charCodeAt(i);
+    } else {
+      gridP = j.grid.p;
+    }
     const hsel = document.getElementById("homeSelect");
     if (hsel && !hsel.options.length) {
       cityData.forEach(c => {
