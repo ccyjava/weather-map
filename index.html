@@ -93,7 +93,7 @@ const WMO = {0:["☀️","晴"],1:["🌤️","大致晴"],2:["⛅","多云"],3:[
   80:["🌧️","阵雨"],81:["🌧️","阵雨"],82:["⛈️","强阵雨"],95:["⛈️","雷阵雨"],96:["⛈️","雷暴冰雹"],99:["⛈️","雷暴冰雹"]};
 const probColor = p => p < 5 ? "#16a34a" : p < 20 ? "#a3e635" : p < 40 ? "#eab308" : p < 70 ? "#f97316" : "#ef4444";
 
-const map = L.map("map").setView([39.8, -98.5], 4);
+const map = L.map("map").setView([47.61, -122.20], 6); // 默认Bellevue 5小时范围
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution:"© OpenStreetMap"}).addTo(map);
 const cityLayer = L.layerGroup().addTo(map);
 const rainLayer = L.layerGroup().addTo(map);
@@ -129,7 +129,7 @@ async function toggleRadar() {
 }
 
 let slots = [], activeSlot = 0, cityData = [];
-let dryMaxDist = Infinity; // 距离筛选：默认全部
+let dryMaxDist = 500; // 距离筛选：默认5小时车程（约500km）
 let gridP = null, gridMeta = null; // 服务端降雨概率网格 flat 数组 rows*cols*时段数
 function buildSlots() {
   const tabs = document.getElementById("tabs");
@@ -182,7 +182,13 @@ async function loadData() {
         hsel.appendChild(o);
       });
       hsel.value = getHomeName();
-      hsel.onchange = () => { setHomeName(hsel.value); render(); };
+      const h0 = cityData.find(c => c.name === getHomeName());
+      if (h0 && h0.name !== "Bellevue") map.setView([h0.lat, h0.lon], 6);
+      hsel.onchange = () => {
+        setHomeName(hsel.value); render();
+        const hc = cityData.find(c => c.name === hsel.value);
+        if (hc) map.setView([hc.lat, hc.lon], 6);
+      };
     }
     buildSlots();
     render();
@@ -378,7 +384,7 @@ function render() {
   // 距离筛选 pills（默认全部）
   const df = document.getElementById("dryFilter");
   if (df && !df.children.length) {
-    [["全部", Infinity], ["50km内", 50], ["100km内", 100], ["200km内", 200]].forEach(([label, v]) => {
+    [["🚗 5小时车程", 500], ["50km内", 50], ["100km内", 100], ["200km内", 200], ["全部", Infinity]].forEach(([label, v]) => {
       const b = document.createElement("button");
       b.className = "pill" + (v === dryMaxDist ? " on" : "");
       b.textContent = label;
@@ -386,9 +392,8 @@ function render() {
       df.appendChild(b);
     });
   } else if (df) {
-    [...df.children].forEach(b => b.classList.toggle("on",
-      (b.textContent === "全部" && dryMaxDist === Infinity) ||
-      (b.textContent !== "全部" && parseInt(b.textContent) === dryMaxDist)));
+    [...df.children].forEach((b, i) => b.classList.toggle("on",
+      [500, 50, 100, 200, Infinity][i] === dryMaxDist));
   }
   const inDist = rows.filter(c => c.dist <= dryMaxDist);
   // 先按降水概率分档（5%一档），同档内按离家距离由近到远
