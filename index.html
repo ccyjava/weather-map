@@ -77,7 +77,7 @@
   <div class="t" id="dryTitle">哪里不下雨？</div>
   <div id="dryList"></div>
 </div>
-<footer>数据：Open-Meteo 预报 · 雷达 RainViewer · 底图 © OpenStreetMap · 每 30 分钟自动刷新</footer>
+<footer>数据：Open-Meteo 预报 · 雷达 RainViewer · 底图 © OpenStreetMap · <span id="cd"></span></footer>
 <div id="loading">⏳ 正在加载天气数据…</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -247,6 +247,7 @@ async function fetchJsonRetry(url, tries) {
 }
 
 async function loadData() {
+  lastLoad = Date.now(); nextRefresh = lastLoad + 30*60*1000;
   document.getElementById("loading").style.display = "flex";
   document.getElementById("errbar").style.display = "none";
   try {
@@ -403,7 +404,16 @@ function render() {
 document.getElementById("refreshBtn").onclick = loadData;
 document.getElementById("retryBtn").onclick = loadData;
 document.getElementById("radarBtn").onclick = toggleRadar;
+// 每 30 分钟自动刷新 + 底部倒计时 + 切回页面时若数据超过 10 分钟则刷新（手机切后台会暂停定时器）
+let lastLoad = 0, nextRefresh = Date.now() + 30*60*1000;
 setInterval(loadData, 30*60*1000);
+setInterval(() => {
+  const el = document.getElementById("cd");
+  if (el) el.textContent = `⏱ ${Math.max(0, Math.ceil((nextRefresh - Date.now())/60000))} 分钟后自动刷新`;
+}, 5000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && Date.now() - lastLoad > 10*60*1000) loadData();
+});
 loadData();
 </script>
 </body>
