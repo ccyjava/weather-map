@@ -20,9 +20,14 @@
   #map { height: 62vh; min-height: 380px; }
   #dry { background: #fff; padding: 10px 12px; border-top: 1px solid #e2e8f0; }
   #dry .t { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #475569; }
-  #dryChips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-  .chip { flex: 0 0 auto; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 20px; padding: 6px 12px; font-size: 13px; cursor: pointer; white-space: nowrap; }
-  .chip b { font-weight: 700; }
+  #dryList { display: flex; flex-direction: column; }
+  .dryrow { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-top: 1px solid #f1f5f9; font-size: 13.5px; cursor: pointer; }
+  .dryrow:first-child { border-top: none; }
+  .dryrow .n { font-weight: 700; min-width: 92px; }
+  .dryrow .w { flex: 1; color: #475569; }
+  .dryrow .t { font-weight: 700; }
+  .dryrow .p { color: #16a34a; font-weight: 700; min-width: 44px; text-align: right; }
+  .dryempty { color: #64748b; font-size: 13px; padding: 8px 4px; }
   #legend { position: absolute; z-index: 600; left: 10px; bottom: 24px; background: rgba(255,255,255,.94); border-radius: 10px; padding: 8px 12px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
   #legend .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
   #legend .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; }
@@ -63,8 +68,8 @@
   </div>
 </div>
 <div id="dry">
-  <div class="t" id="dryTitle">这个时段最干燥的地方</div>
-  <div id="dryChips"></div>
+  <div class="t" id="dryTitle">哪里不下雨？</div>
+  <div id="dryList"></div>
 </div>
 <footer>数据：Open-Meteo 预报 · 雷达 RainViewer · 底图 © OpenStreetMap · 每 30 分钟自动刷新</footer>
 <div id="loading">⏳ 正在加载天气数据…</div>
@@ -255,17 +260,17 @@ function render() {
   });
   // 连续云量阴影（云越多颜色越深，全晴则透明）
   renderCloud(s.time);
-  // driest list
-  const dry = [...rows].sort((a,b)=>a.prob-b.prob).slice(0,10);
-  document.getElementById("dryTitle").textContent = `${s.label}（${s.sub}）最干燥的 10 个地方`;
-  const box = document.getElementById("dryChips");
+  // 不下雨的城市列表（降水概率 <20%，按概率升序、温度降序）
+  const dry = [...rows].filter(c => c.prob < 20).sort((a,b) => a.prob-b.prob || b.temp-a.temp);
+  document.getElementById("dryTitle").textContent = `哪里不下雨？（${s.label} ${s.sub}）`;
+  const box = document.getElementById("dryList");
   box.innerHTML = "";
+  if (!dry.length) box.innerHTML = `<div class="dryempty">这个时段所有城市都有降雨可能，换个时段看看</div>`;
   dry.forEach(c => {
-    const [emoji] = WMO[c.code] || ["❓"];
+    const [emoji, desc] = WMO[c.code] || ["❓","未知"];
     const el = document.createElement("div");
-    el.className = "chip";
-    el.innerHTML = `<b>${c.name}</b> ${emoji} ${Math.round(c.temp)}° · ${c.prob}%`;
-    el.style.borderColor = probColor(c.prob);
+    el.className = "dryrow";
+    el.innerHTML = `<span class="n">${c.home?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p">${c.prob}%</span>`;
     el.onclick = () => map.flyTo([c.lat,c.lon], 9, {duration:.8});
     box.appendChild(el);
   });
