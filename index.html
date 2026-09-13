@@ -93,7 +93,7 @@ const WMO = {0:["☀️","晴"],1:["🌤️","大致晴"],2:["⛅","多云"],3:[
   80:["🌧️","阵雨"],81:["🌧️","阵雨"],82:["⛈️","强阵雨"],95:["⛈️","雷阵雨"],96:["⛈️","雷暴冰雹"],99:["⛈️","雷暴冰雹"]};
 const probColor = p => p < 5 ? "#16a34a" : p < 20 ? "#a3e635" : p < 40 ? "#eab308" : p < 70 ? "#f97316" : "#ef4444";
 
-const map = L.map("map").setView([47.0, -120.6], 6);
+const map = L.map("map").setView([39.8, -98.5], 4);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution:"© OpenStreetMap"}).addTo(map);
 const cityLayer = L.layerGroup().addTo(map);
 const rainLayer = L.layerGroup().addTo(map);
