@@ -206,6 +206,7 @@ function noiseField(W, H) {
 function renderRain(slotIdx) {
   rainLayer.clearLayers();
   if (!gridP || !gridMeta) return;
+  const FADE_PX = 55; // 边缘羽化：距网格边界 55px 内透明度渐隐，消除矩形硬边
   const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = gridMeta;
   let vals = new Float32Array(rows*cols);
   for (let k=0;k<rows*cols;k++) {
@@ -245,7 +246,10 @@ function renderRain(slotIdx) {
       const st = rainStyle(ve);
       if (st) {
         const o = (py*W+qx)*4;
-        px[o]=st[0]; px[o+1]=st[1]; px[o+2]=st[2]; px[o+3]=st[3];
+        let fd = Math.min(qx, W-1-qx, py, H-1-py) / FADE_PX;
+        if (fd > 1) fd = 1;
+        fd = fd*fd*(3-2*fd);
+        px[o]=st[0]; px[o+1]=st[1]; px[o+2]=st[2]; px[o+3]=st[3]*fd;
       }
     }
   }
