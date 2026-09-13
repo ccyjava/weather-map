@@ -69,7 +69,7 @@
     <div class="row"><span class="dot" style="border-color:#ef4444"></span>≥70%</div>
     <div class="row" style="color:#64748b">圆圈颜色 = 降水概率</div>
     <div class="row" style="color:#64748b">灰色阴影 = 云量（越深云越多）</div>
-    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(190,198,212,.3), rgba(130,143,160,.55), rgba(75,90,110,.8), rgba(12,22,38,.97))"></span><span style="color:#64748b">少云 → 浓云</span></div>
+    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(205,210,220,.25), rgba(165,175,190,.4), rgba(125,135,150,.5), rgba(85,95,110,.6))"></span><span style="color:#64748b">少云 → 浓云</span></div>
     <div class="row"><button id="radarBtn" style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">🛰 雷达回波（实况）</button></div>
   </div>
 </div>
@@ -304,13 +304,13 @@ async function loadData() {
   }
 }
 
-// 云量 → 颜色/透明度：明暗对比拉满，淡云很浅、浓云近黑
+// 云量 → 颜色/透明度：云越多越深，但最高只到深灰（地图始终可见，不糊成黑团）
 function cloudStyle(v) {
   if (v < 8) return null;                                     // <8% 近乎晴：透明
-  if (v < 25) return [190,198,212, Math.round(35+(v-8)/17*55)];   // 淡云：很浅
-  if (v < 50) return [130,143,160, Math.round(90+(v-25)/25*60)];  // 少云：浅灰
-  if (v < 75) return [75,90,110,   Math.round(150+(v-50)/25*60)];  // 多云：深灰
-  return [12,22,38, Math.round(210+(v-75)/25*40)];             // 浓云：近黑
+  if (v < 25) return [205,210,220, Math.round(30+(v-8)/17*30)];   // 淡云：很浅
+  if (v < 50) return [165,175,190, Math.round(60+(v-25)/25*35)];   // 少云：浅灰
+  if (v < 75) return [125,135,150, Math.round(95+(v-50)/25*30)];   // 多云：中灰
+  return [85,95,110, Math.round(125+(v-75)/25*25)];             // 浓云：深灰（不发黑）
 }
 // 连续云量阴影：细网格双线性插值 + canvas 渲染为一张半透明图层
 function renderCloud(slotTime) {
