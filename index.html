@@ -19,6 +19,11 @@
   #tabs button.active { border-color: #2563eb; background: #eff6ff; font-weight: 700; }
   #map { height: 62vh; min-height: 380px; }
   #dry { background: #fff; padding: 10px 12px; border-top: 1px solid #e2e8f0; }
+  #hero { margin: 8px 10px 0; padding: 10px 14px; border-radius: 12px; background: linear-gradient(135deg,#ecfdf5,#f0fdfa); border: 1px solid #a7f3d0; font-size: 14px; color: #065f46; cursor: pointer; }
+  #hero b { font-size: 16px; }
+  #dryFilter { display: flex; gap: 6px; margin: 0 0 8px; flex-wrap: wrap; }
+  #dryFilter .pill { border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: #475569; }
+  #dryFilter .pill.on { background: #2563eb; border-color: #2563eb; color: #fff; }
   #dry .t { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #475569; }
   #dryList { display: flex; flex-direction: column; }
   .dryrow { padding: 8px 4px; border-top: 1px solid #f1f5f9; cursor: pointer; }
@@ -61,6 +66,7 @@
 </header>
 <div id="errbar">⚠️ 天气数据加载失败，请检查网络后 <button id="retryBtn">重试</button></div>
 <div id="tabs"></div>
+<div id="hero" style="display:none"></div>
 <div style="position:relative">
   <div id="map"></div>
   <div id="legend">
@@ -77,6 +83,7 @@
 </div>
 <div id="dry">
   <div class="t" id="dryTitle">哪里不下雨？</div>
+  <div id="dryFilter"></div>
   <div id="dryList"></div>
 </div>
 <footer>数据：Open-Meteo 预报 · 雷达 RainViewer · 底图 © OpenStreetMap · <span id="cd"></span></footer>
@@ -98,6 +105,18 @@ const cityLayer = L.layerGroup().addTo(map);
 const rainLayer = L.layerGroup().addTo(map);
 let radarLayer = null, radarOn = false;
 L.control.layers(null, {"城市天气": cityLayer, "降雨阴影（预报）": rainLayer}, {collapsed: false}).addTo(map);
+// 点地图任意位置查降雨概率
+let clickMk = null;
+map.on("click", e => {
+  const p = probAt(e.latlng.lat, e.latlng.lng, activeSlot);
+  if (p == null) return;
+  const pv = Math.round(p);
+  if (clickMk) map.removeLayer(clickMk);
+  clickMk = L.circleMarker(e.latlng, {radius: 7, color: probColor(pv), weight: 3, fillOpacity: 0}).addTo(map);
+  L.popup({closeButton: false}).setLatLng(e.latlng)
+    .setContent(`<div style="font-size:14px">☔ <b style="color:${probColor(pv)}">${pv}%</b> <span style="color:#64748b;font-size:12px">降雨概率</span></div>`)
+    .openOn(map);
+});
 async function toggleRadar() {
   radarOn = !radarOn;
   document.getElementById("radarBtn").classList.toggle("on", radarOn);
@@ -116,6 +135,7 @@ async function toggleRadar() {
 }
 
 let slots = [], activeSlot = 0, cityData = [];
+let dryMaxDist = Infinity; // 距离筛选：默认全部
 let gridP = null, gridMeta = null; // 服务端降雨概率网格 flat 数组 rows*cols*时段数
 function buildSlots() {
   const tabs = document.getElementById("tabs");
@@ -213,29 +233,42 @@ function noiseField(W, H) {
   _nz = {w:W, h:H, f};
   return f;
 }
+// 网格平滑：3x3 均值滤波一遍，抹掉单点尖峰、雨带连成片，同时保留细粒度变化
+function smoothGrid(slotIdx) {
+  const {rows, cols} = gridMeta;
+  let vals = new Float32Array(rows*cols);
+  for (let k=0;k<rows*cols;k++) vals[k] = gridP[k*slots.length+slotIdx] ?? 0;
+  const nv = new Float32Array(rows*cols);
+  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
+    let s=0, n=0;
+    for (let dr=-1;dr<=1;dr++) for (let dc=-1;dc<=1;dc++) {
+      const rr=r+dr, cc=c+dc;
+      if (rr>=0 && rr<rows && cc>=0 && cc<cols) { s += vals[rr*cols+cc]; n++; }
+    }
+    nv[r*cols+c] = s/n;
+  }
+  return nv;
+}
+// 查任意经纬度的插值降雨概率（与阴影同一数据源）
+function probAt(lat, lon, slotIdx) {
+  if (!gridP || !gridMeta) return null;
+  const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = gridMeta;
+  if (lat < LAT_MIN || lat > LAT_MAX || lon < LON_MIN || lon > LON_MAX) return null;
+  const vals = smoothGrid(slotIdx);
+  let r = (lat-LAT_MIN)/DLAT; r = Math.max(0, Math.min(rows-1.001, r));
+  let c = (lon-LON_MIN)/DLON; c = Math.max(0, Math.min(cols-1.001, c));
+  const r0 = Math.floor(r), fr = r-r0, r1 = Math.min(r0+1, rows-1);
+  const c0 = Math.floor(c), fc = c-c0, c1 = Math.min(c0+1, cols-1);
+  return vals[r0*cols+c0]*(1-fr)*(1-fc) + vals[r0*cols+c1]*(1-fr)*fc
+       + vals[r1*cols+c0]*fr*(1-fc)     + vals[r1*cols+c1]*fr*fc;
+}
 // 连续降雨概率阴影：细网格双线性插值 + 分形噪声雨带纹理 + canvas 半透明图层
 function renderRain(slotIdx) {
   rainLayer.clearLayers();
   if (!gridP || !gridMeta) return;
   const FADE_PX = 55; // 边缘羽化：距网格边界 55px 内透明度渐隐，消除矩形硬边
   const {rows, cols, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DLAT, DLON} = gridMeta;
-  let vals = new Float32Array(rows*cols);
-  for (let k=0;k<rows*cols;k++) {
-    vals[k] = gridP[k*slots.length+slotIdx] ?? 0;
-  }
-  // 平滑：3x3 均值滤波一遍，抹掉单点尖峰、雨带连成片，同时保留细粒度变化
-  for (let pass=0; pass<1; pass++) {
-    const nv = new Float32Array(rows*cols);
-    for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
-      let s=0, n=0;
-      for (let dr=-1;dr<=1;dr++) for (let dc=-1;dc<=1;dc++) {
-        const rr=r+dr, cc=c+dc;
-        if (rr>=0 && rr<rows && cc>=0 && cc<cols) { s += vals[rr*cols+cc]; n++; }
-      }
-      nv[r*cols+c] = s/n;
-    }
-    vals = nv;
-  }
+  const vals = smoothGrid(slotIdx);
   const W = 800, H = 590;
   const nz = noiseField(W, H);
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
@@ -342,10 +375,37 @@ function render() {
       box.appendChild(e);
     } else list.forEach(c => box.appendChild(mkRow(c)));
   };
+  // 距离筛选 pills（默认全部）
+  const df = document.getElementById("dryFilter");
+  if (df && !df.children.length) {
+    [["全部", Infinity], ["50km内", 50], ["100km内", 100], ["200km内", 200]].forEach(([label, v]) => {
+      const b = document.createElement("button");
+      b.className = "pill" + (v === dryMaxDist ? " on" : "");
+      b.textContent = label;
+      b.onclick = () => { dryMaxDist = v; render(); };
+      df.appendChild(b);
+    });
+  } else if (df) {
+    [...df.children].forEach(b => b.classList.toggle("on",
+      (b.textContent === "全部" && dryMaxDist === Infinity) ||
+      (b.textContent !== "全部" && parseInt(b.textContent) === dryMaxDist)));
+  }
+  const inDist = rows.filter(c => c.dist <= dryMaxDist);
+  // 🎯 最推荐：概率最低、距离最近（受距离筛选影响）
+  const hero = document.getElementById("hero");
+  if (inDist.length) {
+    const best = [...inDist].sort((a,b) => (a.prob-b.prob) || (a.dist-b.dist))[0];
+    const [be, bd] = WMO[best.code] || ["❓","未知"];
+    hero.style.display = "block";
+    hero.innerHTML = `🎯 最推荐：<b>${best.name}</b> ${be} ${bd} ${Math.round(best.temp)}°C · ☔ <b style="color:${probColor(best.prob)}">${best.prob}%</b> · 📍${Math.round(best.dist)}km <span style="color:#94a3b8;font-size:12px">（${s.label}${s.sub}，点我定位）</span>`;
+    hero.onclick = () => map.flyTo([best.lat, best.lon], 9, {duration: .8});
+  } else {
+    hero.style.display = "none";
+  }
   // 先按降水概率分档（5%一档），同档内按离家距离由近到远
   const byGradeDist = (a,b) => (Math.floor(a.prob/5)-Math.floor(b.prob/5)) || (a.dist-b.dist);
-  sec("☀️ 基本不下雨（<5%）", [...rows].filter(c => c.prob < 5).sort(byGradeDist));
-  sec("🌤️ 降雨概率低（5–20%）", [...rows].filter(c => c.prob >= 5 && c.prob < 20).sort(byGradeDist));
+  sec("☀️ 基本不下雨（<5%）", inDist.filter(c => c.prob < 5).sort(byGradeDist));
+  sec("🌤️ 降雨概率低（5–20%）", inDist.filter(c => c.prob >= 5 && c.prob < 20).sort(byGradeDist));
 }
 
 document.getElementById("refreshBtn").onclick = loadData;
