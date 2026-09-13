@@ -300,8 +300,10 @@ function render() {
       box.appendChild(e);
     } else list.forEach(c => box.appendChild(mkRow(c)));
   };
-  sec("☀️ 基本不下雨（<5%）", [...rows].filter(c => c.prob < 5).sort((a,b) => a.dist-b.dist));
-  sec("🌤️ 降雨概率低（5–20%）", [...rows].filter(c => c.prob >= 5 && c.prob < 20).sort((a,b) => a.dist-b.dist));
+  // 先按降水概率分档（5%一档），同档内按离家距离由近到远
+  const byGradeDist = (a,b) => (Math.floor(a.prob/5)-Math.floor(b.prob/5)) || (a.dist-b.dist);
+  sec("☀️ 基本不下雨（<5%）", [...rows].filter(c => c.prob < 5).sort(byGradeDist));
+  sec("🌤️ 降雨概率低（5–20%）", [...rows].filter(c => c.prob >= 5 && c.prob < 20).sort(byGradeDist));
 }
 
 document.getElementById("refreshBtn").onclick = loadData;
