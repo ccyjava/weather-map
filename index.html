@@ -28,6 +28,7 @@
   .dryrow .w { flex: 1; color: #475569; }
   .dryrow .t { font-weight: 700; }
   .dryrow .p { font-weight: 700; min-width: 44px; text-align: right; }
+  .dryrow .d { color: #94a3b8; font-size: 12px; min-width: 52px; text-align: right; }
   .dryrow .tips { font-size: 12px; color: #64748b; margin-top: 5px; line-height: 1.7; }
   .dryempty { color: #64748b; font-size: 13px; padding: 8px 4px; }
   .drysec { font-size: 13px; font-weight: 700; color: #475569; margin: 10px 0 2px; }
@@ -69,7 +70,7 @@
     <div class="row"><span class="dot" style="border-color:#ef4444"></span>≥70%</div>
     <div class="row" style="color:#64748b">圆圈颜色 = 降水概率</div>
     <div class="row" style="color:#64748b">灰色阴影 = 降雨概率（越深越可能下雨）</div>
-    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(170,180,195,.3), rgba(140,150,168,.45), rgba(110,120,140,.55), rgba(80,92,112,.7))"></span><span style="color:#64748b">概率低 → 概率高</span></div>
+    <div class="row"><span style="display:inline-block;width:64px;height:10px;border-radius:5px;background:linear-gradient(to right, rgba(170,180,195,.16), rgba(155,165,182,.31), rgba(125,135,154,.47), rgba(95,106,126,.61), rgba(80,92,112,.71))"></span><span style="color:#64748b">概率低 → 概率高</span></div>
     <div class="row"><button id="radarBtn" style="border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">🛰 雷达回波（实况）</button></div>
   </div>
 </div>
@@ -156,13 +157,22 @@ async function loadData() {
   }
 }
 
-// 降雨概率 → 颜色/透明度：分档与城市圆圈一致，概率越高越深
+// 降雨概率 → 阴影颜色/透明度：连续映射，概率每差 1% 深浅都不同（13% 和 6% 肉眼可辨）
+const RAIN_STOPS = [
+  [5,  [170,180,195,40]],
+  [20, [155,165,182,80]],
+  [40, [125,135,154,120]],
+  [70, [95,106,126,155]],
+  [100,[80,92,112,180]],
+];
 function rainStyle(v) {
-  if (v < 5) return null;                                       // 基本不下雨：透明
-  if (v < 20) return [170,180,195, Math.round(40+(v-5)/15*40)];     // 概率低：很浅
-  if (v < 40) return [140,150,168, Math.round(80+(v-20)/20*40)];    // 20-40%：浅灰
-  if (v < 70) return [110,120,140, Math.round(120+(v-40)/30*35)];   // 40-70%：中灰
-  return [80,92,112, Math.round(155+(v-70)/30*25)];             // ≥70%：深灰
+  if (v < 5) return null;
+  let a = RAIN_STOPS[0], b = RAIN_STOPS[RAIN_STOPS.length-1];
+  for (let i = 0; i < RAIN_STOPS.length-1; i++) {
+    if (v <= RAIN_STOPS[i+1][0]) { a = RAIN_STOPS[i]; b = RAIN_STOPS[i+1]; break; }
+  }
+  const t = (v - a[0]) / (b[0] - a[0]);
+  return [0,1,2,3].map(k => Math.round(a[1][k] + (b[1][k]-a[1][k])*t));
 }
 // 有机云纹理：多 octave value noise，让云呈现真实轮廓而非直线/团块
 function hash2(x, y) { const h = Math.sin(x*127.1+y*311.7)*43758.5453; return h-Math.floor(h); }
@@ -243,6 +253,14 @@ function render() {
       temp: v.t, prob: v.prob ?? 0,
       code: v.code, cc: v.cc};
   });
+  // 到家的距离（km）：列表按离家距离排序
+  const home = cityData.find(c => c.home) || cityData[0];
+  const R = 6371, rad = Math.PI/180;
+  rows.forEach(c => {
+    const dLa = (c.lat-home.lat)*rad, dLo = (c.lon-home.lon)*rad;
+    const h = Math.sin(dLa/2)**2 + Math.cos(home.lat*rad)*Math.cos(c.lat*rad)*Math.sin(dLo/2)**2;
+    c.dist = 2*R*Math.asin(Math.sqrt(h));
+  });
   rows.forEach(c => {
     const [emoji, desc] = WMO[c.code] || ["❓","未知"];
     const color = probColor(c.prob);
@@ -266,7 +284,7 @@ function render() {
     const el = document.createElement("div");
     el.className = "dryrow";
     const tip = c.tip || "";
-    el.innerHTML = `<div class="r1"><span class="n">${c.home?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p" style="color:${probColor(c.prob)}">${c.prob}%</span></div>${tip?`<div class="tips">${tip}</div>`:""}`;
+    el.innerHTML = `<div class="r1"><span class="n">${c.home?"★ ":""}${c.name}</span><span class="w">${emoji} ${desc}</span><span class="t">${Math.round(c.temp)}°C</span><span class="p" style="color:${probColor(c.prob)}">${c.prob}%</span><span class="d">📍${Math.round(c.dist)}km</span></div>${tip?`<div class="tips">${tip}</div>`:""}`;
     el.onclick = () => map.flyTo([c.lat,c.lon], 9, {duration:.8});
     return el;
   };
@@ -282,8 +300,8 @@ function render() {
       box.appendChild(e);
     } else list.forEach(c => box.appendChild(mkRow(c)));
   };
-  sec("☀️ 基本不下雨（<5%）", [...rows].filter(c => c.prob < 5).sort((a,b) => b.temp-a.temp));
-  sec("🌤️ 降雨概率低（5–20%）", [...rows].filter(c => c.prob >= 5 && c.prob < 20).sort((a,b) => a.prob-b.prob || b.temp-a.temp));
+  sec("☀️ 基本不下雨（<5%）", [...rows].filter(c => c.prob < 5).sort((a,b) => a.dist-b.dist));
+  sec("🌤️ 降雨概率低（5–20%）", [...rows].filter(c => c.prob >= 5 && c.prob < 20).sort((a,b) => a.dist-b.dist));
 }
 
 document.getElementById("refreshBtn").onclick = loadData;
